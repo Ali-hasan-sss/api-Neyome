@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neyome API Docs</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; line-height: 1.5; }
+    header { padding: 24px; background: #0f172a; color: #fff; }
+    main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+    h1, h2, h3 { margin: 16px 0; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; margin-right: 8px; }
+    .get { background: #e0f2fe; color: #0369a1; }
+    .post { background: #dcfce7; color: #166534; }
+    .patch { background: #fef9c3; color: #854d0e; }
+    .delete { background: #fee2e2; color: #991b1b; }
+    section { border-top: 1px solid #e5e7eb; padding-top: 24px; margin-top: 24px; }
+    pre { background: #0b1020; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow: auto; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .endpoint { margin: 12px 0; }
+    .small { color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Neyome REST API</h1>
+    <div class="small">All endpoints require header <code>x-api-key: &lt;API_KEY&gt;</code>. Responses are shaped as <code>{ success: boolean, data: any, message: string }</code>. <a href="/docs" style="color:#93c5fd; margin-left:8px;">Open Swagger UI</a></div>
+  </header>
+  <main>
+    <h2>Conventions</h2>
+    <ul>
+      <li>Pagination params: <code>?page=1&limit=20&sortBy=createdAt&sortOrder=DESC</code></li>
+      <li>ID format: <code>uuid</code></li>
+      <li>Soft deletes: delete endpoints perform soft delete</li>
+    </ul>
+
+    <section id="users">
+      <h2>Users</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/users?name=ali&email=@gmail.com&page=1&limit=10&sortBy=createdAt&sortOrder=DESC</code></div>
+      <pre><code>curl -H "x-api-key: $API_KEY" "http://localhost:3000/users?name=ali&email=@gmail.com&page=1&limit=10&sortBy=createdAt&sortOrder=DESC"
+# Response
+{ "success": true, "data": { "items": [/* User[] */], "total": 1, "page": 1, "limit": 10 }, "message": "Users fetched" }</code></pre>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/users/:id</code></div>
+      <pre><code>curl -H "x-api-key: $API_KEY" http://localhost:3000/users/8f6a9c0e-...
+# Response
+{ "success": true, "data": {/* User */}, "message": "User fetched" }</code></pre>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/users</code></div>
+      <pre><code>curl -H "Content-Type: application/json" -H "x-api-key: $API_KEY" -d '{
+  "id": "8f6a9c0e-4c7a-4c72-8a3d-1b3fc0f0aa11",
+  "name": "Ali",
+  "email": "ali@example.com",
+  "familyId": "2f1a9f4e-1111-2222-3333-aaaaaaaaaaaa"
+}' http://localhost:3000/users
+# Response
+{ "success": true, "data": {/* User */}, "message": "User created" }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/users/:id</code></div>
+      <pre><code>curl -X PATCH -H "Content-Type: application/json" -H "x-api-key: $API_KEY" \
+  -d '{ "name": "Ali Updated" }' http://localhost:3000/users/8f6a9c0e-...
+# Response
+{ "success": true, "data": {/* User */}, "message": "User updated" }</code></pre>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/users/:id</code></div>
+      <pre><code>curl -X DELETE -H "x-api-key: $API_KEY" http://localhost:3000/users/8f6a9c0e-...
+# Response
+{ "success": true, "data": {"id":"8f6a9c0e-..."}, "message": "User deleted" }</code></pre>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "isParent?": true,
+  "name?": "string",
+  "email?": "string",
+  "emojiOption?": 1,
+  "profileImageUrl?": "string",
+  "points?": 0,
+  "createdAt?": "ISO date",
+  "updatedAt?": "ISO date",
+  "locale?": "en",
+  "familyCode?": "string",
+  "familyId?": "uuid"
+}</code></pre>
+    </section>
+
+    <section id="tasks">
+      <h2>Tasks</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/tasks?status=pending&assigneeId=&lt;uuid&gt;&familyId=&lt;uuid&gt;&page=1&limit=20</code></div>
+      <pre><code>curl -H "x-api-key: $API_KEY" "http://localhost:3000/tasks?status=pending&assigneeId=...&familyId=..."
+# Response
+{ "success": true, "data": { "items": [/* Task[] */], "total": 2, "page": 1, "limit": 20 }, "message": "Tasks fetched" }</code></pre>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/tasks/:id</code></div>
+      <pre><code>curl -H "x-api-key: $API_KEY" http://localhost:3000/tasks/f5b3d0b8-...
+{ "success": true, "data": {/* Task */}, "message": "Task fetched" }</code></pre>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/tasks</code></div>
+      <pre><code>curl -H "Content-Type: application/json" -H "x-api-key: $API_KEY" -d '{
+  "id": "f5b3d0b8-aaaa-bbbb-cccc-000000000001",
+  "title": "Do homework",
+  "points": 10,
+  "assigneeId": "...",
+  "familyId": "...",
+  "dueAt": "2025-01-01T18:00:00Z"
+}' http://localhost:3000/tasks
+# Response
+{ "success": true, "data": {/* Task */}, "message": "Task created" }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/tasks/:id</code></div>
+      <pre><code>curl -X PATCH -H "Content-Type: application/json" -H "x-api-key: $API_KEY" \
+  -d '{ "status": "completed", "completed": true }' http://localhost:3000/tasks/f5b3d0b8-...
+{ "success": true, "data": {/* Task */}, "message": "Task updated" }</code></pre>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/tasks/:id</code></div>
+      <pre><code>curl -X DELETE -H "x-api-key: $API_KEY" http://localhost:3000/tasks/f5b3d0b8-...
+{ "success": true, "data": {"id":"f5b3d0b8-..."}, "message": "Task deleted" }</code></pre>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "title?": "string",
+  "completed?": false,
+  "status?": "string",
+  "points?": 0,
+  "tz?": "string",
+  "reminders?": {},
+  "taskType?": "string",
+  "taskTypeKey?": "string",
+  "date?": "ISO date",
+  "dueAt?": "ISO date",
+  "createdAt?": "ISO date",
+  "completedAt?": "ISO date",
+  "submittedAt?": "ISO date",
+  "assigneeName?": "string",
+  "completedByName?": "string",
+  "familyId?": "uuid",
+  "assigneeId?": "uuid",
+  "completedBy?": "string",
+  "submittedBy?": "string"
+}</code></pre>
+    </section>
+
+    <section id="families"><h2>Families</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/families?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/families/:id</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/families</code></div>
+      <pre><code>{ "id": "uuid", "name": "The Smiths", "familyCode": "ABC123", "ownerId": "uuid" }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/families/:id</code></div>
+      <pre><code>{ "name": "The Smiths Updated" }
+# Response: { "success": true, "data": {/* Family */}, "message": "Family updated" }</code></pre>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/families/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "familyCode?": "string",
+  "name?": "string",
+  "creatorId?": "uuid",
+  "ownerId?": "uuid",
+  "createdAt?": "ISO date",
+  "plan?": {}
+}</code></pre>
+    </section>
+    <section id="rewards"><h2>Rewards</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/rewards?page=1&limit=20&sortBy=createdAt&sortOrder=DESC</code></div>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/rewards/:id</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/rewards</code></div>
+      <pre><code>{ "id": "...", "name": "Bike", "points": 100, "userId": "..." }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/rewards/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/rewards/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "name?": "string",
+  "points?": 0,
+  "earned?": false,
+  "fulfilled?": false,
+  "progress?": 0,
+  "createdAt?": "ISO date",
+  "dayClaimed?": "ISO date",
+  "userId?": "uuid"
+}</code></pre>
+    </section>
+    <section id="claimed-rewards"><h2>Claimed Rewards</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/claimed-rewards?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/claimed-rewards</code></div>
+      <pre><code>{ "id": "...", "rewardId": "...", "userId": "...", "pointsUsed": 50 }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/claimed-rewards/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/claimed-rewards/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "claimedAt?": "ISO date",
+  "rewardName?": "string",
+  "rewardId?": "uuid",
+  "approved?": false,
+  "earned?": false,
+  "pointsUsed?": 0,
+  "userId?": "uuid"
+}</code></pre>
+    </section>
+    <section id="point-ledger"><h2>Point Ledger</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/point-ledger?page=1&limit=20&sortBy=createdAt&sortOrder=DESC</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/point-ledger</code></div>
+      <pre><code>{ "id": "...", "reason": "Task completed", "amount": 10, "userId": "...", "familyId": "...", "refTaskId": "..." }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/point-ledger/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/point-ledger/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "reason?": "string",
+  "amount?": 0,
+  "createdAt?": "ISO date",
+  "familyId?": "uuid",
+  "userId?": "uuid",
+  "refTaskId?": "uuid"
+}</code></pre>
+    </section>
+    <section id="streaks"><h2>Streaks</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/streaks?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/streaks</code></div>
+      <pre><code>{ "id": "...", "count": 2, "maxCount": 10, "lastWasOnTime": true, "lastActiveDate": "2025-01-01T00:00:00Z" }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/streaks/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/streaks/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",  // user id
+  "count?": 0,
+  "maxCount?": 0,
+  "lastWasOnTime?": false,
+  "lastActiveDate?": "ISO date"
+}</code></pre>
+    </section>
+    <section id="user-settings"><h2>User Settings</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/user-settings?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/user-settings</code></div>
+      <pre><code>{ "id": "...", "marketing": true, "pushEnabled": true, "dailyReminder": "18:00" }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/user-settings/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/user-settings/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",  // user id
+  "marketing?": false,
+  "rewardApproved?": false,
+  "pushEnabled?": true,
+  "dailyReminder?": "HH:mm",
+  "taskAssigned?": false,
+  "updatedAt?": "ISO date"
+}</code></pre>
+    </section>
+    <section id="support-categories"><h2>Support Categories</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/support-categories?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/support-categories</code></div>
+      <pre><code>{ "id": "...", "name_en": "Billing" }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/support-categories/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/support-categories/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "name_de?": "string",
+  "name_ar?": "string",
+  "name_en?": "string"
+}</code></pre>
+    </section>
+    <section id="support-requests"><h2>Support Requests</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/support-requests?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/support-requests</code></div>
+      <pre><code>{ "id": "...", "name": "Ali", "email": "ali@example.com", "message": "Help", "categoryId": "..." }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/support-requests/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/support-requests/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "createdAt?": "ISO date",
+  "attachmentUrl?": "string|null",
+  "name?": "string",
+  "message?": "string",
+  "categoryName?": "string",
+  "email?": "string",
+  "categoryId?": "uuid"
+}</code></pre>
+    </section>
+    <section id="support-faqs"><h2>Support FAQs</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/support-faqs?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/support-faqs</code></div>
+      <pre><code>{ "id": "...", "question": {"en":"Q?"}, "answer": {"en":"A."} }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/support-faqs/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/support-faqs/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "question?": {},
+  "answer?": {}
+}</code></pre>
+    </section>
+    <section id="reward-lists"><h2>Reward Lists</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/reward-lists?page=1&limit=20&familyId=&lt;uuid&gt;</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/reward-lists</code></div>
+      <pre><code>{ "id": "...", "familyId": "...", "name": "Weekend", "points": 20 }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/reward-lists/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/reward-lists/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "familyId?": "uuid",
+  "name?": "string",
+  "icon?": "string",
+  "points?": 0,
+  "createdAt?": "ISO date",
+  "parentId?": "uuid"
+}</code></pre>
+    </section>
+    <section id="badges"><h2>Badges</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/badges?page=1&limit=20&familyId=&lt;uuid&gt;</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/badges</code></div>
+      <pre><code>{ "id": "...", "familyId": "...", "emoji": "🏆", "threshold": 100 }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/badges/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/badges/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "familyId?": "uuid",
+  "emoji?": "string",
+  "description?": {},
+  "threshold?": 0,
+  "title?": {},
+  "trigger?": "string",
+  "createdAt?": "ISO date"
+}</code></pre>
+    </section>
+    <section id="task-types"><h2>Task Types</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/task-types?page=1&limit=20&familyId=&lt;uuid&gt;</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/task-types</code></div>
+      <pre><code>{ "id": "...", "familyId": "...", "emoji": "🧹", "title": {"en":"Chores"} }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/task-types/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/task-types/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "familyId?": "uuid",
+  "emoji?": "string",
+  "createdBy?": "string",
+  "sortOrder?": 0,
+  "title?": {},
+  "isActive?": true,
+  "key?": "string",
+  "createdAt?": "ISO date"
+}</code></pre>
+    </section>
+    <section id="subscription-plans"><h2>Subscription Plans</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/subscription-plans?page=1&limit=20</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/subscription-plans</code></div>
+      <pre><code>{ "id": "...", "productId": "apple-sub-001", "title": {"en":"Family"}, "features": {"maxUsers":5} }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/subscription-plans/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/subscription-plans/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "badge?": {},
+  "features?": {},
+  "productId?": "string|null",
+  "subtitle?": {},
+  "sort?": 0,
+  "title?": {},
+  "periodShort?": {},
+  "limitsVersion?": 0,
+  "limits?": {}
+}</code></pre>
+    </section>
+    <section id="pages"><h2>Pages</h2>
+      <div class="endpoint"><span class="tag get">GET</span> <code>/pages?page=1&limit=20&type=home</code></div>
+      <div class="endpoint"><span class="tag post">POST</span> <code>/pages</code></div>
+      <pre><code>{ "id": "...", "type": "home", "version": "v1", "content": {"blocks": []} }</code></pre>
+      <div class="endpoint"><span class="tag patch">PATCH</span> <code>/pages/:id</code></div>
+      <div class="endpoint"><span class="tag delete">DELETE</span> <code>/pages/:id</code></div>
+      <h3>Model</h3>
+      <pre><code>{
+  "id": "uuid",
+  "cards?": {},
+  "content?": {},
+  "locales?": {},
+  "type?": "string",
+  "version?": "string",
+  "updatedAt?": "ISO date"
+}</code></pre>
+    </section>
+
+    <section>
+      <h2>Error Response Example</h2>
+      <pre><code># Missing API key
+HTTP/1.1 401 Unauthorized
+{ "success": false, "data": null, "message": "Invalid API key" }</code></pre>
+    </section>
+  </main>
+</body>
+</html>
