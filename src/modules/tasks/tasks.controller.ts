@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiCreatedWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -64,6 +64,11 @@ export class TasksController {
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Create task',
+    description:
+      'If created already in a completed state, `completedAt` is set and the assignee streak advances like PATCH completion.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiCreatedWrappedResponse(CreateTaskDto, {
     id: 'f5b3d0b8-aaaa-bbbb-cccc-000000000001',
@@ -81,6 +86,11 @@ export class TasksController {
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update task',
+    description:
+      'When a task becomes completed (`completed: true` or `status` completed/done) for the first time, `completedAt` is set if missing and the assignee streak is updated (calendar day uses task `tz` when valid IANA, else UTC). Re-completing does not change streak again.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateTaskDto, {
     id: 'f5b3d0b8-aaaa-bbbb-cccc-000000000001',

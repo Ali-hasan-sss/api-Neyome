@@ -1,8 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
+import { Body, Controller, Get, Patch, Request, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiOkWrappedResponse, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateUserSettingDto } from './dto/create-user-setting.dto';
 import { UpdateUserSettingDto } from './dto/update-user-setting.dto';
 import { UserSettingsService } from './user-settings.service';
@@ -15,6 +14,11 @@ export class UserSettingsController {
   constructor(private readonly service: UserSettingsService) {}
 
   @Get('my-settings')
+  @ApiOperation({
+    summary: 'All persisted user preferences',
+    description:
+      'Includes marketing plus notification-related columns. For push-only prefs with defaults see `GET /notifications/settings`.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateUserSettingDto, {
     id: 'u1111111-2222-3333-4444-555555555555',
@@ -28,6 +32,11 @@ export class UserSettingsController {
   }
 
   @Patch('my-settings')
+  @ApiOperation({
+    summary: 'Upsert full user settings row',
+    description:
+      'Any combination of fields including `marketing`. Notification toggles can also be updated via `PATCH /notifications/settings` without touching marketing.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateUserSettingDto, {
     id: 'u1111111-2222-3333-4444-555555555555',

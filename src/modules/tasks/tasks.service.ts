@@ -1,17 +1,25 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, ILike } from 'typeorm';
 import { Task } from '../../entities/task.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { StreaksService } from '../streaks/streaks.service';
 
 @Injectable()
 export class TasksService {
   constructor(
     @InjectRepository(Task)
     private readonly repo: Repository<Task>,
+    private readonly streaksService: StreaksService,
   ) {}
+
+  private isTaskCompleted(task: Pick<Task, 'completed' | 'status'>): boolean {
+    if (task.completed === true) return true;
+    const s = task.status?.trim().toLowerCase();
+    return s === 'completed' || s === 'done';
+  }
 
   async findAll(query: PaginationQueryDto & { title?: string; status?: string; assigneeId?: string; familyId?: string }) {
     const { page = 1, limit = 20, sortBy, sortOrder, title, status, assigneeId, familyId } = query;
@@ -52,7 +60,22 @@ export class TasksService {
       date: dto.date ? new Date(dto.date) : undefined,
       dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
     } as any);
-    return await this.repo.save(entity);
+
+    if (this.isTaskCompleted(entity as Task) && !entity.completedAt) {
+      entity.completedAt = new Date();
+    }
+
+    const saved = await this.repo.save(entity);
+
+    if (this.isTaskCompleted(saved) && saved.assigneeId) {
+      await this.streaksService.recordTaskCompletion(saved.assigneeId, {
+        at: saved.completedAt ? new Date(saved.completedAt) : new Date(),
+        dueAt: saved.dueAt,
+        tz: saved.tz,
+      });
+    }
+
+    return saved;
   }
 
   async update(id: string, dto: UpdateTaskDto) {
@@ -67,12 +90,29 @@ export class TasksService {
 
   async updateForFamily(id: string, familyId: string, dto: UpdateTaskDto) {
     const existing = await this.findOneForFamily(id, familyId);
+    const wasCompleted = this.isTaskCompleted(existing);
+
     Object.assign(existing, {
       ...dto,
       date: (dto as any).date ? new Date((dto as any).date) : existing.date,
       dueAt: (dto as any).dueAt ? new Date((dto as any).dueAt) : existing.dueAt,
     });
-    return await this.repo.save(existing);
+
+    if (!wasCompleted && this.isTaskCompleted(existing) && !existing.completedAt) {
+      existing.completedAt = new Date();
+    }
+
+    const saved = await this.repo.save(existing);
+
+    if (!wasCompleted && this.isTaskCompleted(saved) && saved.assigneeId) {
+      await this.streaksService.recordTaskCompletion(saved.assigneeId, {
+        at: saved.completedAt ? new Date(saved.completedAt) : new Date(),
+        dueAt: saved.dueAt,
+        tz: saved.tz,
+      });
+    }
+
+    return saved;
   }
 
   async remove(id: string) {

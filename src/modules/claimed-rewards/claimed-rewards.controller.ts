@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -44,6 +44,11 @@ export class ClaimedRewardsController {
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Create claimed-reward row',
+    description:
+      'If the row is already **committed** (`claimedAt`, `earned`, or `approved`), debits `pointsUsed` from the user. Ledger prefix `claimed_reward_obligation`.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiCreatedWrappedResponse(CreateClaimedRewardDto, {
     id: 'cr111111-2222-3333-4444-555555555555',
@@ -57,6 +62,11 @@ export class ClaimedRewardsController {
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update claimed reward (replace cost)',
+    description:
+      'Same obligation math as `PATCH /rewards/:id`: committed rows use `pointsUsed`; increasing cost while committed debits the difference; decreasing refunds; removing commitment refunds full prior amount. Reasons `claimed_reward_obligation` / `claimed_reward_delete_refund` on delete.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateClaimedRewardDto, {
     id: 'cr111111-2222-3333-4444-555555555555',
@@ -68,6 +78,10 @@ export class ClaimedRewardsController {
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete claimed reward row',
+    description: 'Refunds committed `pointsUsed` when applicable (`claimed_reward_delete_refund`).',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkResponse({
     schema: {

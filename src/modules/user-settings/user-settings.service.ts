@@ -5,6 +5,7 @@ import { UserSetting } from '../../entities/user-setting.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateUserSettingDto } from './dto/create-user-setting.dto';
 import { UpdateUserSettingDto } from './dto/update-user-setting.dto';
+import { NotificationSettingsResponseDto, UpdateNotificationSettingsDto } from './dto/notification-settings.dto';
 
 @Injectable()
 export class UserSettingsService {
@@ -27,6 +28,44 @@ export class UserSettingsService {
   async findOne(id: string) {
     const entity = await this.repo.findOne({ where: { id } });
     return entity; // Return null if not found, user may not have settings yet
+  }
+
+  async getNotificationSettings(userId: string): Promise<NotificationSettingsResponseDto> {
+    const row = await this.findOne(userId);
+    return {
+      id: userId,
+      pushEnabled: row?.pushEnabled ?? true,
+      dailyReminder: row?.dailyReminder ?? null,
+      taskAssigned: row?.taskAssigned ?? true,
+      rewardApproved: row?.rewardApproved ?? true,
+      updatedAt: row?.updatedAt ?? null,
+    };
+  }
+
+  async patchNotificationSettings(userId: string, dto: UpdateNotificationSettingsDto): Promise<NotificationSettingsResponseDto> {
+    let existing = await this.repo.findOne({ where: { id: userId } });
+    if (existing) {
+      if (dto.pushEnabled !== undefined) existing.pushEnabled = dto.pushEnabled;
+      if (dto.taskAssigned !== undefined) existing.taskAssigned = dto.taskAssigned;
+      if (dto.rewardApproved !== undefined) existing.rewardApproved = dto.rewardApproved;
+      if ('dailyReminder' in dto) {
+        existing.dailyReminder = dto.dailyReminder === null ? null : dto.dailyReminder;
+      }
+      existing.updatedAt = new Date();
+      await this.repo.save(existing);
+    } else {
+      await this.repo.save(
+        this.repo.create({
+          id: userId,
+          pushEnabled: dto.pushEnabled ?? true,
+          taskAssigned: dto.taskAssigned ?? true,
+          rewardApproved: dto.rewardApproved ?? true,
+          dailyReminder: dto.dailyReminder === null ? null : dto.dailyReminder,
+          updatedAt: new Date(),
+        } as any),
+      );
+    }
+    return this.getNotificationSettings(userId);
   }
 
   async upsert(id: string, dto: UpdateUserSettingDto) {

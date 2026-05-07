@@ -1,4 +1,11 @@
-import { Injectable, UnauthorizedException, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +19,7 @@ import { CreateFamilyMemberDto } from './dto/create-family-member.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from './mail.service';
+import { encryptDevicePin, decryptDevicePin } from './device-pin-crypto';
 
 export interface JwtPayload {
   sub: string;
@@ -153,6 +161,17 @@ export class AuthService {
       pinHash = await bcrypt.hash(dto.pin, 10);
     }
 
+    let devicePinEnc: string | undefined;
+    if (dto.pin && dto.age !== undefined && dto.age !== null && dto.age < 6) {
+      try {
+        devicePinEnc = encryptDevicePin(dto.pin);
+      } catch {
+        throw new BadRequestException(
+          'Could not store recoverable PIN (set DEVICE_PIN_ENCRYPTION_KEY or ensure JWT_SECRET is at least 16 characters)',
+        );
+      }
+    }
+
     // Create family member
     const user = this.userRepo.create({
       id: userId,
@@ -164,6 +183,7 @@ export class AuthService {
       magicLinkExpiresAt,
       age: dto.age,
       pinHash,
+      devicePinEnc,
       emojiOption: dto.emojiOption,
       profileImageUrl: dto.profileImageUrl,
       points: 0,
@@ -177,9 +197,49 @@ export class AuthService {
     const autoSignInUrl = `${baseUrl}/auth/auto-signin/${magicLinkToken}`;
 
     // Remove sensitive fields
-    const { password, magicLinkToken: token, pinHash: _pinHash, ...safeUser } = user as any;
+    const { password, magicLinkToken: token, pinHash: _pinHash, devicePinEnc: _devicePinEnc, ...safeUser } = user as any;
 
     return { user: safeUser, autoSignInUrl };
+  }
+
+  /**
+   * Parent-only: decrypt stored device PIN for a child under 6 (when ciphertext exists).
+   */
+  async getRecoverableDevicePinForParent(parentId: string, childId: string): Promise<{ pin: string }> {
+    const parent = await this.userRepo.findOne({ where: { id: parentId, isParent: true } });
+    if (!parent?.familyId) {
+      throw new NotFoundException('Parent not found');
+    }
+
+    const child = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.devicePinEnc')
+      .where('user.id = :childId', { childId })
+      .andWhere('user.familyId = :familyId', { familyId: parent.familyId })
+      .andWhere('user.isParent = :isParent', { isParent: false })
+      .getOne();
+
+    if (!child) {
+      throw new NotFoundException('Child not found in your family');
+    }
+
+    if (child.age == null || child.age >= 6) {
+      throw new ForbiddenException('Recoverable device PIN is only available for children under 6');
+    }
+
+    if (!child.devicePinEnc) {
+      throw new NotFoundException(
+        'No recoverable PIN stored for this child; provide pin when creating the member with age under 6',
+      );
+    }
+
+    try {
+      return { pin: decryptDevicePin(child.devicePinEnc) };
+    } catch {
+      throw new BadRequestException(
+        'Stored PIN could not be decrypted — verify DEVICE_PIN_ENCRYPTION_KEY (or JWT_SECRET) matches the value used when the PIN was saved',
+      );
+    }
   }
 
   /**

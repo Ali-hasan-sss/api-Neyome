@@ -9,8 +9,11 @@ import {
   ApiConflictResponse,
   ApiNotFoundResponse,
   ApiForbiddenResponse,
+  ApiBadRequestResponse,
   ApiParam,
   ApiBody,
+  ApiExtraModels,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
@@ -31,11 +34,13 @@ import {
   ResetPasswordDto,
   ForgotPasswordResponseDto,
   ResetPasswordResponseDto,
+  ChildDevicePinDataDto,
 } from './dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ParentGuard } from './parent.guard';
 
 @ApiTags('Auth')
+@ApiExtraModels(ChildDevicePinDataDto)
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -102,6 +107,10 @@ Returns the created user and an auto sign-in URL that can be shared with the fam
 
 **Authentication:** Requires JWT token from a parent user.
 
+**PIN storage:**
+- Age **> 6**: \`pin\` required (bcrypt); **no** parent recoverable copy.
+- Age **< 6** with optional \`pin\`: bcrypt + encrypted recoverable copy — parent can read via \`GET /auth/family-members/:childId/device-pin\`.
+
 **Auto Sign-In URL:**
 - Valid for 1 year
 - Can be regenerated if needed
@@ -128,6 +137,62 @@ Returns the created user and an auto sign-in URL that can be shared with the fam
   async createFamilyMember(@Request() req: any, @Body() dto: CreateFamilyMemberDto) {
     const data = await this.authService.createFamilyMember(req.user.sub, dto);
     return { success: true, data, message: 'Family member created' };
+  }
+
+  @Get('family-members/:childId/device-pin')
+  @UseGuards(JwtAuthGuard, ParentGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get recoverable device PIN (child under 6)',
+    description: `
+Returns the child's **4-digit PIN** when:
+- The signed-in user is a **parent**
+- The child belongs to the parent's family
+- The child's **age is under 6** (\`age < 6\`)
+- A recoverable ciphertext was stored when the child was created (**send \`pin\` with \`age < 6\`** on \`POST /auth/family-members\`)
+
+**Storage model:** bcrypt hash remains used where applicable; recoverable copy is **AES-256-GCM** using \`DEVICE_PIN_ENCRYPTION_KEY\` (recommended) or \`JWT_SECRET\` (min 16 chars). Rotating the key makes existing ciphertext undecryptable.
+
+Treat the response as secret — do not log.
+    `,
+  })
+  @ApiParam({ name: 'childId', format: 'uuid', description: 'Child user id' })
+  @ApiOkResponse({
+    description: 'Wrapped PIN',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Device PIN retrieved' },
+        data: { $ref: getSchemaPath(ChildDevicePinDataDto) },
+      },
+    },
+    examples: {
+      sample: {
+        summary: 'Success',
+        value: { success: true, message: 'Device PIN retrieved', data: { pin: '1234' } },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Missing or invalid JWT token',
+    type: ErrorResponseDto,
+  })
+  @ApiForbiddenResponse({
+    description: 'Caller is not a parent, or child age is 6+',
+    type: ErrorResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Child not in family, or no recoverable PIN was stored',
+    type: ErrorResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Ciphertext cannot be decrypted (wrong DEVICE_PIN_ENCRYPTION_KEY / JWT_SECRET)',
+    type: ErrorResponseDto,
+  })
+  async getChildDevicePin(@Request() req: any, @Param('childId') childId: string) {
+    const data = await this.authService.getRecoverableDevicePinForParent(req.user.sub, childId);
+    return { success: true, data, message: 'Device PIN retrieved' };
   }
 
   @Post('family-code/members')

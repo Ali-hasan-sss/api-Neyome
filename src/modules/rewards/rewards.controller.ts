@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
@@ -44,6 +44,11 @@ export class RewardsController {
   }
 
   @Post()
+  @ApiOperation({
+    summary: 'Create reward',
+    description:
+      'Points balance: while a reward is **claimed/redeemed** (`fulfilled`, `earned`, or `dayClaimed`), the child pays `points`. Ledger prefix `reward_obligation`.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiCreatedWrappedResponse(CreateRewardDto, {
     id: 'r1111111-2222-3333-4444-555555555555',
@@ -57,6 +62,11 @@ export class RewardsController {
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update reward',
+    description:
+      '**Claim / replace / unclaim:** Uses committed `points` when the slot is redeemed (`fulfilled`, `earned`, or `dayClaimed`). Replacing with a higher cost debits the delta; clearing redemption refunds. Send `dayClaimed: null`, `fulfilled: false`, or `earned: false` as needed. **400** if insufficient points or reward has no `userId`.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateRewardDto, {
     id: 'r1111111-2222-3333-4444-555555555555',
@@ -69,6 +79,11 @@ export class RewardsController {
   }
 
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete reward',
+    description:
+      'If the reward was claimed, refunds the committed `points` to the child (`reward_delete_refund`) then soft-deletes.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkResponse({
     schema: {

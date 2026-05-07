@@ -24,7 +24,8 @@ export class CreateFamilyMemberDto {
 
   @ApiPropertyOptional({
     type: Number,
-    description: 'Child age in years. If > 6, PIN is required for manual sign-in by family code.',
+    description:
+      'Child age in years. If age > 6, PIN is required for manual sign-in by family code. If age < 6 and `pin` is sent, a recoverable encrypted copy is stored so the parent can read it via `GET /auth/family-members/:childId/device-pin`.',
     example: 7,
   })
   @IsOptional()
@@ -34,7 +35,8 @@ export class CreateFamilyMemberDto {
   age?: number;
 
   @ApiPropertyOptional({
-    description: '4-digit PIN (required if age > 6)',
+    description:
+      '4-digit PIN (required if age > 6). Optional under 6; if provided and age < 6, stored hashed for verification and encrypted for parent recovery.',
     example: '1234',
     minLength: 4,
     maxLength: 4,

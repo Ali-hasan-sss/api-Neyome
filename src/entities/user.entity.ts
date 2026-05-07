@@ -63,6 +63,10 @@ export class User {
   @Column({ type: 'text', nullable: true, select: false })
   pinHash?: string;
 
+  /** AES-GCM ciphertext (base64url); only for children under 6 when PIN was set — parent recovery via API. */
+  @Column({ type: 'text', nullable: true, select: false })
+  devicePinEnc?: string | null;
+
   @Column({ type: 'jsonb', nullable: true })
   badges?: any;
 
