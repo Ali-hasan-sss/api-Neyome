@@ -123,13 +123,13 @@ export class RewardsService {
         ...dto,
         createdAt: dto.createdAt ? new Date(dto.createdAt) : undefined,
         dayClaimed: dto.dayClaimed ? new Date(dto.dayClaimed) : undefined,
-      } as any);
+      } as Reward);
 
       const nowClaimed = this.isClaimed(entity);
       const newPoints = entity.points ?? 0;
       const balanceDelta = this.obligationBalanceDelta(false, 0, nowClaimed, newPoints);
 
-      const saved = await rewardRepo.save(entity);
+      const saved = (await rewardRepo.save(entity)) as Reward;
 
       if (balanceDelta !== 0) {
         if (!saved.userId) {

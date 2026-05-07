@@ -59,13 +59,13 @@ export class TasksService {
       ...dto,
       date: dto.date ? new Date(dto.date) : undefined,
       dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
-    } as any);
+    } as Task);
 
-    if (this.isTaskCompleted(entity as Task) && !entity.completedAt) {
+    if (this.isTaskCompleted(entity) && !entity.completedAt) {
       entity.completedAt = new Date();
     }
 
-    const saved = await this.repo.save(entity);
+    const saved = (await this.repo.save(entity)) as Task;
 
     if (this.isTaskCompleted(saved) && saved.assigneeId) {
       await this.streaksService.recordTaskCompletion(saved.assigneeId, {

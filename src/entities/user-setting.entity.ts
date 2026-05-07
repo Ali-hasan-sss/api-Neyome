@@ -16,7 +16,7 @@ export class UserSetting {
   pushEnabled?: boolean;
 
   @Column({ type: 'text', nullable: true })
-  dailyReminder?: string;
+  dailyReminder?: string | null;
 
   @Column({ type: 'boolean', nullable: true })
   taskAssigned?: boolean;

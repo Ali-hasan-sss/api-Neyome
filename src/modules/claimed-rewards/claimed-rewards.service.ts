@@ -118,9 +118,9 @@ export class ClaimedRewardsService {
       const entity = rewardRepo.create({
         ...dto,
         claimedAt: dto.claimedAt ? new Date(dto.claimedAt) : undefined,
-      } as any);
+      } as ClaimedReward);
 
-      const saved = await rewardRepo.save(entity);
+      const saved = (await rewardRepo.save(entity)) as ClaimedReward;
       const committed = this.isCommitted(saved);
       const pts = saved.pointsUsed ?? 0;
       const balanceDelta = this.obligationBalanceDelta(false, 0, committed, pts);
