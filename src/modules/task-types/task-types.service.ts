@@ -1,16 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TaskType } from '../../entities/task-type.entity';
+import { Family } from '../../entities/family.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateTaskTypeDto } from './dto/create-task-type.dto';
 import { UpdateTaskTypeDto } from './dto/update-task-type.dto';
+import { SubscriptionPlansService } from '../subscription-plans/subscription-plans.service';
 
 @Injectable()
 export class TaskTypesService {
   constructor(
     @InjectRepository(TaskType)
     private readonly repo: Repository<TaskType>,
+    @InjectRepository(Family)
+    private readonly familyRepo: Repository<Family>,
+    private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -49,6 +54,18 @@ export class TaskTypesService {
   }
 
   async create(dto: CreateTaskTypeDto) {
+    if (dto.familyId) {
+      const family = await this.familyRepo.findOne({ where: { id: dto.familyId } });
+      if (family) {
+        const backendId = (family.plan as any)?.backendId ?? 'free';
+        const limits = await this.subscriptionPlansService.getLimitsByBackendId(backendId);
+        const taskTypes = (limits?.taskTypes as string | undefined) ?? 'limited';
+        if (taskTypes === 'limited') {
+          throw new BadRequestException('Custom task types are not available on your current plan');
+        }
+      }
+    }
+
     const entity = this.repo.create({
       ...dto,
       createdAt: dto.createdAt ? new Date(dto.createdAt) : undefined,

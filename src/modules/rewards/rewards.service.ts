@@ -5,15 +5,22 @@ import { randomUUID } from 'crypto';
 import { Reward } from '../../entities/reward.entity';
 import { User } from '../../entities/user.entity';
 import { PointLedger } from '../../entities/point-ledger.entity';
+import { Family } from '../../entities/family.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateRewardDto } from './dto/create-reward.dto';
 import { UpdateRewardDto } from './dto/update-reward.dto';
+import { SubscriptionPlansService } from '../subscription-plans/subscription-plans.service';
 
 @Injectable()
 export class RewardsService {
   constructor(
     @InjectRepository(Reward)
     private readonly repo: Repository<Reward>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    @InjectRepository(Family)
+    private readonly familyRepo: Repository<Family>,
+    private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   /** Claimed / redeemed slot — includes `fulfilled` when apps mark delivery without `earned`/`dayClaimed`. */
@@ -117,6 +124,29 @@ export class RewardsService {
   }
 
   async create(dto: CreateRewardDto) {
+    if (!dto.userId) {
+      throw new BadRequestException('Reward userId is required');
+    }
+
+    const user = await this.userRepo.findOne({ where: { id: dto.userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.familyId) {
+      const family = await this.familyRepo.findOne({ where: { id: user.familyId } });
+      const backendId = (family?.plan as any)?.backendId ?? 'free';
+      const limits = await this.subscriptionPlansService.getLimitsByBackendId(backendId);
+      const maxRewards = typeof limits?.rewards === 'number' ? (limits.rewards as number) : null;
+
+      if (maxRewards != null) {
+        const rewardsCount = await this.repo.count({ where: { userId: dto.userId } });
+        if (rewardsCount >= maxRewards) {
+          throw new BadRequestException('Rewards limit reached for your current plan');
+        }
+      }
+    }
+
     return this.repo.manager.transaction(async (em) => {
       const rewardRepo = em.getRepository(Reward);
       const entity = rewardRepo.create({

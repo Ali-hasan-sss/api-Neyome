@@ -11,10 +11,12 @@ import { ParentGuard } from './parent.guard';
 import { MailService } from './mail.service';
 import { User } from '../entities/user.entity';
 import { Family } from '../entities/family.entity';
+import { SubscriptionPlansModule } from '../modules/subscription-plans/subscription-plans.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Family]),
+    SubscriptionPlansModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

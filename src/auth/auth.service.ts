@@ -13,6 +13,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
 import { Family } from '../entities/family.entity';
+import { SubscriptionPlansService } from '../modules/subscription-plans/subscription-plans.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { CreateFamilyMemberDto } from './dto/create-family-member.dto';
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly familyRepo: Repository<Family>,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   /**
@@ -62,6 +64,7 @@ export class AuthService {
       creatorId: userId,
       ownerId: userId,
       createdAt: new Date(),
+      plan: { backendId: 'free' },
     });
 
     // Create parent user
@@ -143,6 +146,24 @@ export class AuthService {
     const parent = await this.userRepo.findOne({ where: { id: parentId, isParent: true } });
     if (!parent || !parent.familyId) {
       throw new NotFoundException('Parent or family not found');
+    }
+
+    const family = await this.familyRepo.findOne({ where: { id: parent.familyId } });
+    if (!family) {
+      throw new NotFoundException('Family not found');
+    }
+
+    const backendId = (family.plan as any)?.backendId ?? 'free';
+    const limits = await this.subscriptionPlansService.getLimitsByBackendId(backendId);
+    const maxMembers = typeof limits?.familyMembers === 'number' ? (limits.familyMembers as number) : null;
+
+    if (maxMembers != null) {
+      const childrenCount = await this.userRepo.count({
+        where: { familyId: parent.familyId, isParent: false },
+      });
+      if (childrenCount >= maxMembers) {
+        throw new BadRequestException('Family members limit reached for your current plan');
+      }
     }
 
     // Generate magic link token

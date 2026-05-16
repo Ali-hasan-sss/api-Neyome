@@ -24,6 +24,7 @@ import { PagesModule } from './modules/pages/pages.module';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { DailyQuotesModule } from './modules/daily-quotes/daily-quotes.module';
+import { StripeBillingModule } from './modules/billing/stripe/stripe-billing.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { DailyQuotesModule } from './modules/daily-quotes/daily-quotes.module';
     BadgesModule,
     TaskTypesModule,
     SubscriptionPlansModule,
+    StripeBillingModule,
     PagesModule,
     DailyQuotesModule,
   ],
