@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID, Matches } from 'class-validator';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class FamilyCodeMembersDto {
   @ApiProperty({
@@ -27,13 +27,11 @@ export class FamilyCodeChildSignInDto {
   childId: string;
 
   @ApiPropertyOptional({
-    description: '4-digit PIN (required if child age > 6)',
+    description:
+      'Child device PIN. **Age > 6:** 4 digits (required). **Age ≤ 6:** 4-character emoji PIN or 4 digits if the child has a PIN set.',
     example: '1234',
-    minLength: 4,
-    maxLength: 4,
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{4}$/)
   pin?: string;
 }

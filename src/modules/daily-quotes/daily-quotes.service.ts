@@ -1,79 +1,55 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DailyQuote } from '../../entities/daily-quote.entity';
-import * as fs from 'fs';
-import * as path from 'path';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { DailyQuoteDto } from './dto/daily-quote.dto';
 
 @Injectable()
 export class DailyQuotesService {
-  private readonly logger = new Logger(DailyQuotesService.name);
-  private seeded = false;
-
   constructor(
     @InjectRepository(DailyQuote)
     private readonly repo: Repository<DailyQuote>,
-  ) {
-    // Seed asynchronously on startup (best-effort)
-    this.seedFromSchemaJson().catch((err) => {
-      this.logger.warn(`Daily quotes seed skipped/failed: ${err?.message ?? err}`);
+  ) {}
+
+  async findAll(query: PaginationQueryDto) {
+    const { page = 1, limit = 20, sortBy, sortOrder } = query;
+    const [items, total] = await this.repo.findAndCount({
+      take: limit,
+      skip: (page - 1) * limit,
+      order: sortBy ? { [sortBy]: (sortOrder ?? 'ASC') as any } : { id: 'ASC' },
+      withDeleted: false,
     });
+    return { items, total, page, limit };
   }
 
-  private parseFirestoreTimestamp(value: any): Date | undefined {
-    if (!value) return undefined;
-    if (typeof value === 'string') {
-      const d = new Date(value);
-      return isNaN(d.getTime()) ? undefined : d;
-    }
-    if (typeof value === 'object' && value.__datatype === 'timestamp' && value.value) {
-      const d = new Date(value.value);
-      return isNaN(d.getTime()) ? undefined : d;
-    }
-    return undefined;
+  async findOne(id: string) {
+    const entity = await this.repo.findOne({ where: { id } });
+    if (!entity) throw new NotFoundException('Daily quote not found');
+    return entity;
   }
 
-  private async seedFromSchemaJson(): Promise<void> {
-    if (this.seeded) return;
+  async create(dto: DailyQuoteDto) {
+    const entity = this.repo.create({
+      id: dto.id,
+      text: dto.text,
+      createdAt: dto.createdAt ? new Date(dto.createdAt) : new Date(),
+    });
+    return await this.repo.save(entity);
+  }
 
-    const schemaPath = path.join(process.cwd(), 'schema.json');
-    if (!fs.existsSync(schemaPath)) {
-      this.seeded = true;
-      return;
-    }
+  async update(id: string, dto: DailyQuoteDto) {
+    const existing = await this.findOne(id);
+    Object.assign(existing, {
+      text: dto.text ?? existing.text,
+      createdAt: dto.createdAt ? new Date(dto.createdAt) : existing.createdAt,
+    });
+    return await this.repo.save(existing);
+  }
 
-    const raw = fs.readFileSync(schemaPath, 'utf8');
-    const json = JSON.parse(raw);
-
-    const dailyQuotes = json?.__collections?.daily_quotes;
-    if (!dailyQuotes || typeof dailyQuotes !== 'object') {
-      this.seeded = true;
-      return;
-    }
-
-    const items: DailyQuote[] = [];
-    for (const [id, docWrapper] of Object.entries<any>(dailyQuotes)) {
-      const doc = docWrapper?.__doc;
-      if (!doc) continue;
-
-      items.push(
-        this.repo.create({
-          id,
-          text: typeof doc.text === 'string' ? doc.text : undefined,
-          createdAt: this.parseFirestoreTimestamp(doc.createdAt),
-        }),
-      );
-    }
-
-    if (items.length === 0) {
-      this.seeded = true;
-      return;
-    }
-
-    // Idempotent upsert via primary key (save will insert/update)
-    await this.repo.save(items, { chunk: 500 });
-    this.seeded = true;
-    this.logger.log(`Daily quotes seeded: ${items.length}`);
+  async remove(id: string) {
+    await this.repo.softDelete(id);
+    return { id };
   }
 
   private dayOfYear(date: Date): number {

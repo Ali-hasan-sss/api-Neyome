@@ -34,6 +34,8 @@ import {
   ResetPasswordDto,
   ForgotPasswordResponseDto,
   ResetPasswordResponseDto,
+  RequestEmailChangeDto,
+  VerifyEmailChangeDto,
   ChildDevicePinDataDto,
 } from './dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -107,9 +109,10 @@ Returns the created user and an auto sign-in URL that can be shared with the fam
 
 **Authentication:** Requires JWT token from a parent user.
 
-**PIN storage:**
-- Age **> 6**: \`pin\` required (bcrypt); **no** parent recoverable copy.
-- Age **< 6** with optional \`pin\`: bcrypt + encrypted recoverable copy — parent can read via \`GET /auth/family-members/:childId/device-pin\`.
+**PIN rules:**
+- Age **≤ 6**: optional **emoji PIN** — exactly **4 characters** (e.g. \`🌟🎈🐻🎨\`). Numeric \`1234\` also allowed.
+- Age **> 6**: **4-digit numeric PIN** required (e.g. \`1234\`); no parent recoverable copy.
+- Age **≤ 6** with \`pin\`: bcrypt hash + **encrypted recoverable copy** — parent reads via \`GET /auth/family-members/:childId/device-pin\`.
 
 **Auto Sign-In URL:**
 - Valid for 1 year
@@ -143,13 +146,13 @@ Returns the created user and an auto sign-in URL that can be shared with the fam
   @UseGuards(JwtAuthGuard, ParentGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get recoverable device PIN (child under 6)',
+    summary: 'Get recoverable device PIN (child age 6 or under)',
     description: `
-Returns the child's **4-digit PIN** when:
+Returns the child's stored PIN (emoji or numeric) when:
 - The signed-in user is a **parent**
 - The child belongs to the parent's family
-- The child's **age is under 6** (\`age < 6\`)
-- A recoverable ciphertext was stored when the child was created (**send \`pin\` with \`age < 6\`** on \`POST /auth/family-members\`)
+- The child's **age is 6 or under** (\`age ≤ 6\`)
+- A recoverable ciphertext was stored when the child was created (**send \`pin\` with \`age ≤ 6\`** on \`POST /auth/family-members\`)
 
 **Storage model:** bcrypt hash remains used where applicable; recoverable copy is **AES-256-GCM** using \`DEVICE_PIN_ENCRYPTION_KEY\` (recommended) or \`JWT_SECRET\` (min 16 chars). Rotating the key makes existing ciphertext undecryptable.
 
@@ -170,7 +173,7 @@ Treat the response as secret — do not log.
     examples: {
       sample: {
         summary: 'Success',
-        value: { success: true, message: 'Device PIN retrieved', data: { pin: '1234' } },
+        value: { success: true, message: 'Device PIN retrieved', data: { pin: '🌟🎈🐻🎨' } },
       },
     },
   })
@@ -179,7 +182,7 @@ Treat the response as secret — do not log.
     type: ErrorResponseDto,
   })
   @ApiForbiddenResponse({
-    description: 'Caller is not a parent, or child age is 6+',
+    description: 'Caller is not a parent, or child age is over 6',
     type: ErrorResponseDto,
   })
   @ApiNotFoundResponse({
@@ -205,7 +208,7 @@ Allows a child to manually enter a family code (when QR scan is unavailable) and
 1. Child enters family code
 2. App lists all children in that family
 3. Child selects their profile
-4. If child age > 6, app will ask for 4-digit PIN in the next step
+4. If child age > 6, app asks for **4-digit numeric PIN**; if age ≤ 6 and a PIN was set, **4-character emoji PIN** may be used
     `,
   })
   @ApiBody({ type: FamilyCodeMembersDto })
@@ -231,7 +234,8 @@ Manual child sign-in flow using family code and child selection.
 **Requirements:**
 - Valid family code
 - Valid child id within that family
-- If child age > 6: 4-digit PIN is required
+- If child age > 6: **4-digit numeric PIN** is required
+- If child age ≤ 6 and a PIN was configured: **4-character emoji PIN** (or digits) when signing in with PIN
     `,
   })
   @ApiBody({ type: FamilyCodeChildSignInDto })
@@ -438,5 +442,76 @@ Reset the user's password using the OTP received via email.
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.authService.resetPassword(dto);
     return { success: true, message: 'Password reset successfully' };
+  }
+
+  @Post('change-email/request')
+  @UseGuards(JwtAuthGuard, ParentGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Request email change (sends OTP to new email)',
+    description: `
+Parent users can change their login email in two steps:
+
+1. **POST /auth/change-email/request** — provide \`newEmail\`; a 6-digit OTP is sent to the **new** address (valid 10 minutes).
+2. **POST /auth/change-email/verify** — provide \`newEmail\` and \`otp\` to confirm; returns updated user and a new JWT.
+
+Requires authentication (parent with email/password account).
+    `,
+  })
+  @ApiBody({ type: RequestEmailChangeDto })
+  @ApiOkResponse({
+    description: 'Verification code sent to new email',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Verification code sent to your new email' },
+        data: {
+          type: 'object',
+          properties: { expiresInMinutes: { type: 'number', example: 10 } },
+        },
+      },
+    },
+  })
+  @ApiConflictResponse({ description: 'Email already in use', type: ErrorResponseDto })
+  @ApiBadRequestResponse({ description: 'Invalid request', type: ErrorResponseDto })
+  async requestEmailChange(@Request() req: any, @Body() dto: RequestEmailChangeDto) {
+    const data = await this.authService.requestEmailChange(req.user.sub, dto);
+    return {
+      success: true,
+      data,
+      message: 'Verification code sent to your new email',
+    };
+  }
+
+  @Post('change-email/verify')
+  @UseGuards(JwtAuthGuard, ParentGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify OTP and apply new email',
+    description: 'Confirms the pending email change using the OTP sent to the new address.',
+  })
+  @ApiBody({ type: VerifyEmailChangeDto })
+  @ApiOkResponse({
+    description: 'Email updated; new JWT issued',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Email updated successfully' },
+        data: {
+          type: 'object',
+          properties: {
+            user: { type: 'object' },
+            accessToken: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  @ApiBadRequestResponse({ description: 'Invalid or expired OTP', type: ErrorResponseDto })
+  async verifyEmailChange(@Request() req: any, @Body() dto: VerifyEmailChangeDto) {
+    const data = await this.authService.verifyEmailChange(req.user.sub, dto);
+    return { success: true, data, message: 'Email updated successfully' };
   }
 }

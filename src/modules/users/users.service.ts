@@ -13,12 +13,22 @@ export class UsersService {
     private readonly repo: Repository<User>,
   ) {}
 
-  async findAll(query: PaginationQueryDto & { name?: string; email?: string }) {
-    const { page = 1, limit = 20, sortBy, sortOrder, name, email } = query;
+  async findAll(
+    query: PaginationQueryDto & { name?: string; email?: string; search?: string },
+  ) {
+    const { page = 1, limit = 20, sortBy, sortOrder, name, email, search } = query;
 
-    const where: FindOptionsWhere<User> = {};
-    if (name) where.name = ILike(`%${name}%`);
-    if (email) where.email = ILike(`%${email}%`);
+    const term = search?.trim();
+    let where: FindOptionsWhere<User> | FindOptionsWhere<User>[] = {};
+    if (term) {
+      const like = ILike(`%${term}%`);
+      where = [{ name: like }, { email: like }];
+    } else {
+      const single: FindOptionsWhere<User> = {};
+      if (name) single.name = ILike(`%${name}%`);
+      if (email) single.email = ILike(`%${email}%`);
+      where = single;
+    }
 
     const [items, total] = await this.repo.findAndCount({
       where,
@@ -50,7 +60,7 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    const entity = await this.repo.findOne({ where: { id } });
+    const entity = await this.repo.findOne({ where: { id }, relations: { family: true } });
     if (!entity) throw new NotFoundException('User not found');
     return entity;
   }

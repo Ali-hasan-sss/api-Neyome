@@ -15,6 +15,9 @@ export class User {
   @Column({ type: 'boolean', nullable: true })
   isParent?: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isAdmin?: boolean;
+
   @Column({ type: 'text', nullable: true })
   name?: string;
 
@@ -35,6 +38,16 @@ export class User {
 
   @Column({ type: 'timestamptz', nullable: true })
   passwordResetOtpExpiresAt?: Date;
+
+  /** New email awaiting OTP verification (change-email flow). */
+  @Column({ type: 'text', nullable: true, select: false })
+  pendingEmail?: string | null;
+
+  @Column({ type: 'text', nullable: true, select: false })
+  emailChangeOtp?: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  emailChangeOtpExpiresAt?: Date | null;
 
   @Column({ type: 'integer', nullable: true })
   emojiOption?: number;

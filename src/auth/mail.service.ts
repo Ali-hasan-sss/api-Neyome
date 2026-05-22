@@ -52,4 +52,36 @@ export class MailService {
       throw error;
     }
   }
+
+  async sendEmailChangeOtp(email: string, otp: string, userName?: string): Promise<void> {
+    const fromEmail = this.configService.get<string>('SMTP_FROM') || 'noreply@neyome.com';
+    const appName = this.configService.get<string>('APP_NAME') || 'Neyome';
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: `"${appName}" <${fromEmail}>`,
+      to: email,
+      subject: `${appName} - Verify your new email`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Confirm your new email</h2>
+          <p>Hello${userName ? ` ${userName}` : ''},</p>
+          <p>Use this verification code to confirm your new email address for ${appName}:</p>
+          <div style="background-color: #f4f4f4; padding: 20px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #333;">${otp}</span>
+          </div>
+          <p>This code is valid for <strong>10 minutes</strong>.</p>
+          <p>If you did not request this change, ignore this email.</p>
+        </div>
+      `,
+      text: `Your email verification code is: ${otp}. Valid for 10 minutes.`,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email change OTP sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send email change OTP to ${email}`, error);
+      throw error;
+    }
+  }
 }

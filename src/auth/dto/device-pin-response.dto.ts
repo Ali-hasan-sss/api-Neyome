@@ -3,7 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export class ChildDevicePinDataDto {
   @ApiProperty({
     description:
-      '4-digit device PIN (recoverable copy stored encrypted for children under 6 only). Do not log or cache in clients.',
+      'Device PIN (emoji or numeric; recoverable for children age 6 and under only). Do not log or cache in clients.',
     example: '1234',
     pattern: '^\\d{4}$',
   })

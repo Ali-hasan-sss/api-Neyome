@@ -5,4 +5,5 @@ export * from './family-code.dto';
 export * from './auth-response.dto';
 export * from './forgot-password.dto';
 export * from './reset-password.dto';
+export * from './change-email.dto';
 export * from './device-pin-response.dto';

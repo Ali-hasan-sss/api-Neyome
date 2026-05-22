@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsUUID, IsInt, Min, Max, Matches } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsInt, Min, Max } from 'class-validator';
 
 /**
  * DTO for creating a family member (child) account
@@ -25,8 +25,8 @@ export class CreateFamilyMemberDto {
   @ApiPropertyOptional({
     type: Number,
     description:
-      'Child age in years. If age > 6, PIN is required for manual sign-in by family code. If age < 6 and `pin` is sent, a recoverable encrypted copy is stored so the parent can read it via `GET /auth/family-members/:childId/device-pin`.',
-    example: 7,
+      'Child age in years. **Age ≤ 6:** optional **emoji PIN** (exactly 4 characters). **Age > 6:** required **numeric PIN** (4 digits). For age ≤ 6 with `pin`, a recoverable encrypted copy is stored for `GET /auth/family-members/:childId/device-pin`.',
+    example: 5,
   })
   @IsOptional()
   @IsInt()
@@ -36,14 +36,11 @@ export class CreateFamilyMemberDto {
 
   @ApiPropertyOptional({
     description:
-      '4-digit PIN (required if age > 6). Optional under 6; if provided and age < 6, stored hashed for verification and encrypted for parent recovery.',
-    example: '1234',
-    minLength: 4,
-    maxLength: 4,
+      'Device PIN. **Age > 6:** 4 digits only (e.g. `"1234"`). **Age ≤ 6:** 4-character emoji PIN (e.g. `"🌟🎈🐻🎨"`) or 4 digits. Validated in the service from `age`.',
+    example: '🌟🎈🐻🎨',
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{4}$/)
   pin?: string;
 
   @ApiPropertyOptional({

@@ -13,15 +13,22 @@ export class PagesService {
     private readonly repo: Repository<Page>,
   ) {}
 
-  async findAll(query: PaginationQueryDto) {
-    const { page = 1, limit = 20, sortBy, sortOrder } = query;
+  async findAll(query: PaginationQueryDto & { type?: string }) {
+    const { page = 1, limit = 20, sortBy, sortOrder, type } = query;
     const [items, total] = await this.repo.findAndCount({
+      where: type ? { type } : undefined,
       take: limit,
       skip: (page - 1) * limit,
       order: sortBy ? { [sortBy]: (sortOrder ?? 'ASC') as any } : undefined,
       withDeleted: false,
     });
     return { items, total, page, limit };
+  }
+
+  async findByType(type: string) {
+    const entity = await this.repo.findOne({ where: { type } });
+    if (!entity) throw new NotFoundException(`Page with type "${type}" not found`);
+    return entity;
   }
 
   async findOne(id: string) {

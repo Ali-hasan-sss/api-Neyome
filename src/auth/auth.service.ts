@@ -19,13 +19,21 @@ import { LoginDto } from './dto/login.dto';
 import { CreateFamilyMemberDto } from './dto/create-family-member.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RequestEmailChangeDto, VerifyEmailChangeDto } from './dto/change-email.dto';
 import { MailService } from './mail.service';
 import { encryptDevicePin, decryptDevicePin } from './device-pin-crypto';
+import {
+  assertPinFormatForAge,
+  assertPinRequiredForAge,
+  isOlderChild,
+  isYoungChild,
+} from './pin-validation';
 
 export interface JwtPayload {
   sub: string;
   email?: string;
   isParent: boolean;
+  isAdmin?: boolean;
   familyId?: string;
 }
 
@@ -173,8 +181,9 @@ export class AuthService {
     // Generate UUID if not provided
     const userId = dto.id || crypto.randomUUID();
 
-    if (dto.age !== undefined && dto.age > 6 && !dto.pin) {
-      throw new BadRequestException('PIN is required for children older than 6');
+    assertPinRequiredForAge(dto.pin, dto.age);
+    if (dto.pin) {
+      assertPinFormatForAge(dto.pin, dto.age);
     }
 
     let pinHash: string | undefined;
@@ -183,7 +192,7 @@ export class AuthService {
     }
 
     let devicePinEnc: string | undefined;
-    if (dto.pin && dto.age !== undefined && dto.age !== null && dto.age < 6) {
+    if (dto.pin && isYoungChild(dto.age ?? null)) {
       try {
         devicePinEnc = encryptDevicePin(dto.pin);
       } catch {
@@ -244,13 +253,13 @@ export class AuthService {
       throw new NotFoundException('Child not found in your family');
     }
 
-    if (child.age == null || child.age >= 6) {
-      throw new ForbiddenException('Recoverable device PIN is only available for children under 6');
+    if (child.age == null || child.age > 6) {
+      throw new ForbiddenException('Recoverable device PIN is only available for children age 6 or under');
     }
 
     if (!child.devicePinEnc) {
       throw new NotFoundException(
-        'No recoverable PIN stored for this child; provide pin when creating the member with age under 6',
+        'No recoverable PIN stored for this child; provide pin when creating the member with age 6 or under',
       );
     }
 
@@ -305,13 +314,20 @@ export class AuthService {
       throw new NotFoundException('Child not found');
     }
 
-    if ((child.age ?? 0) > 6) {
+    if (isOlderChild(child.age ?? null)) {
       if (!params.pin) {
         throw new BadRequestException('PIN is required for children older than 6');
       }
+      assertPinFormatForAge(params.pin, child.age);
       if (!child.pinHash) {
         throw new BadRequestException('PIN is not set for this child');
       }
+      const isPinValid = await bcrypt.compare(params.pin, child.pinHash);
+      if (!isPinValid) {
+        throw new UnauthorizedException('Invalid PIN');
+      }
+    } else if (params.pin && child.pinHash) {
+      assertPinFormatForAge(params.pin, child.age);
       const isPinValid = await bcrypt.compare(params.pin, child.pinHash);
       if (!isPinValid) {
         throw new UnauthorizedException('Invalid PIN');
@@ -551,5 +567,105 @@ export class AuthService {
       passwordResetOtpExpiresAt: null as any,
       updatedAt: new Date(),
     });
+  }
+
+  /**
+   * Request email change — sends OTP to the new email (parent accounts only).
+   */
+  async requestEmailChange(userId: string, dto: RequestEmailChangeDto): Promise<{ expiresInMinutes: number }> {
+    const user = await this.userRepo.findOne({ where: { id: userId, isParent: true } });
+    if (!user || !user.email) {
+      throw new BadRequestException('Only parent accounts with an email can change email');
+    }
+
+    const newEmail = dto.newEmail.trim().toLowerCase();
+    const currentEmail = user.email.trim().toLowerCase();
+
+    if (newEmail === currentEmail) {
+      throw new BadRequestException('New email must be different from current email');
+    }
+
+    const taken = await this.userRepo.findOne({ where: { email: newEmail } });
+    if (taken) {
+      throw new ConflictException('Email is already in use');
+    }
+
+    const otp = this.generateOtp();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    await this.userRepo.update(user.id, {
+      pendingEmail: newEmail,
+      emailChangeOtp: hashedOtp,
+      emailChangeOtpExpiresAt: otpExpiresAt,
+      updatedAt: new Date(),
+    });
+
+    await this.mailService.sendEmailChangeOtp(newEmail, otp, user.name);
+
+    return { expiresInMinutes: 10 };
+  }
+
+  /**
+   * Verify OTP and apply new email.
+   */
+  async verifyEmailChange(
+    userId: string,
+    dto: VerifyEmailChangeDto,
+  ): Promise<{ user: Partial<User>; accessToken: string }> {
+    const user = await this.userRepo
+      .createQueryBuilder('user')
+      .addSelect('user.emailChangeOtp')
+      .addSelect('user.pendingEmail')
+      .where('user.id = :id', { id: userId })
+      .andWhere('user.isParent = :isParent', { isParent: true })
+      .getOne();
+
+    if (!user || !user.email) {
+      throw new BadRequestException('Invalid request');
+    }
+
+    const newEmail = dto.newEmail.trim().toLowerCase();
+    const pending = user.pendingEmail?.trim().toLowerCase();
+
+    if (!pending || pending !== newEmail) {
+      throw new BadRequestException('No pending email change for this address. Request a new code first');
+    }
+
+    if (!user.emailChangeOtp) {
+      throw new BadRequestException('No verification code found. Request a new code');
+    }
+
+    if (user.emailChangeOtpExpiresAt && new Date() > user.emailChangeOtpExpiresAt) {
+      throw new BadRequestException('Verification code expired. Request a new one');
+    }
+
+    const valid = await bcrypt.compare(dto.otp, user.emailChangeOtp);
+    if (!valid) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    const taken = await this.userRepo.findOne({ where: { email: newEmail } });
+    if (taken && taken.id !== user.id) {
+      throw new ConflictException('Email is already in use');
+    }
+
+    user.email = newEmail;
+    user.pendingEmail = null;
+    user.emailChangeOtp = null;
+    user.emailChangeOtpExpiresAt = null;
+    user.updatedAt = new Date();
+    await this.userRepo.save(user);
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      isParent: true,
+      familyId: user.familyId,
+    };
+    const accessToken = this.jwtService.sign(payload);
+    const { password, magicLinkToken, pinHash, devicePinEnc, ...safeUser } = user;
+
+    return { user: safeUser, accessToken };
   }
 }

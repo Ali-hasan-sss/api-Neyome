@@ -25,6 +25,8 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { DailyQuotesModule } from './modules/daily-quotes/daily-quotes.module';
 import { StripeBillingModule } from './modules/billing/stripe/stripe-billing.module';
+import { AdminModule } from './admin/admin.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -50,6 +52,8 @@ import { StripeBillingModule } from './modules/billing/stripe/stripe-billing.mod
     StripeBillingModule,
     PagesModule,
     DailyQuotesModule,
+    AdminModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [AppService],
