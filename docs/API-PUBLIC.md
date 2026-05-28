@@ -64,6 +64,54 @@ X-Locale: ar
 
 ---
 
+## Subscription Plans
+
+### `GET /public/subscription-plans`
+
+Paginated list of all available subscription plans with pricing and features.
+
+**Query:** `page` (default 1), `limit` (default 50)
+
+**Example**
+
+```http
+GET /public/subscription-plans?page=1&limit=50
+```
+
+**Response**
+
+```json
+{
+  "success": true,
+  "message": "Subscription plans fetched",
+  "data": {
+    "items": [
+      {
+        "id": "...",
+        "name": "Free",
+        "price": 0,
+        "currency": "USD",
+        "interval": "month",
+        "features": {
+          "backendId": "free",
+          "maxUsers": 5,
+          "maxTasks": 100
+        },
+        "limits": {
+          "users": 5,
+          "tasks": 100
+        }
+      }
+    ],
+    "total": 3,
+    "page": 1,
+    "limit": 50
+  }
+}
+```
+
+---
+
 ## Legal pages
 
 ### `GET /public/pages/privacy`
@@ -112,5 +160,7 @@ Legacy routes return **raw JSONB** (all languages). Prefer **`/public/*`** for l
 |-------|------|-----------|
 | `GET /public/support-faqs` | none | yes |
 | `GET /public/pages/privacy` | none | yes |
+| `GET /public/subscription-plans` | none | yes |
 | `GET /support-faqs` | `x-api-key` | no (full maps) |
 | `GET /pages`, `GET /pages/:id` | `x-api-key` | no |
+| `GET /subscription-plans` | `x-api-key` | no |

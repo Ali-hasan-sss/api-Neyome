@@ -4,12 +4,14 @@ import type { AppLocale } from '../common/locale/locale.util';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { PagesService } from '../modules/pages/pages.service';
 import { SupportFaqsService } from '../modules/support-faqs/support-faqs.service';
+import { SubscriptionPlansService } from '../modules/subscription-plans/subscription-plans.service';
 
 @Injectable()
 export class PublicCmsService {
   constructor(
     private readonly pagesService: PagesService,
     private readonly supportFaqsService: SupportFaqsService,
+    private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   async findFaqs(query: PaginationQueryDto, locale: AppLocale) {
@@ -29,5 +31,13 @@ export class PublicCmsService {
   async findPageByType(type: string, locale: AppLocale) {
     const page = await this.pagesService.findByType(type);
     return localizePage(page, locale);
+  }
+
+  async findSubscriptionPlans(query: PaginationQueryDto) {
+    const data = await this.subscriptionPlansService.findAll({
+      ...query,
+      limit: query.limit ?? 50,
+    });
+    return data;
   }
 }

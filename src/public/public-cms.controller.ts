@@ -79,4 +79,20 @@ export class PublicCmsController {
       message: 'Page fetched',
     }));
   }
+
+  @Get('subscription-plans')
+  @ApiOperation({
+    summary: 'List subscription plans (public)',
+    description: 'Returns all available subscription plans with pricing and features. No authentication required.',
+  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @ApiOkResponse({ description: 'Paginated subscription plans list' })
+  findSubscriptionPlans(@Query() query: PaginationQueryDto) {
+    return this.publicCms.findSubscriptionPlans(query).then((data) => ({
+      success: true,
+      data,
+      message: 'Subscription plans fetched',
+    }));
+  }
 }
