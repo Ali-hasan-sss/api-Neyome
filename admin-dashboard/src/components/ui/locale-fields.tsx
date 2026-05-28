@@ -68,3 +68,38 @@ export function LocaleContentFields({
     </div>
   );
 }
+
+export function LocaleArrayFields({
+  label,
+  values,
+  onChange,
+  hint,
+}: {
+  label: string;
+  values: Record<LocaleCode, string[]>;
+  onChange: (loc: LocaleCode, items: string[]) => void;
+  hint?: string;
+}) {
+  return (
+    <fieldset className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+      <legend className="px-1 text-sm font-medium text-slate-700">{label}</legend>
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      {LOCALES.map((loc) => (
+        <div key={loc} className="space-y-2">
+          <p className="text-xs font-medium text-slate-600">{localeLabels[loc]}</p>
+          <textarea
+            className={`${inputClass}`}
+            rows={5}
+            defaultValue={values[loc]?.join('\n') ?? ''}
+            onChange={(e) => {
+              const items = e.target.value.split('\n').filter((line) => line.trim() !== '');
+              onChange(loc, items);
+            }}
+            placeholder="أدخل كل ميزة في سطر جديد"
+            dir={loc === 'ar' ? 'rtl' : 'ltr'}
+          />
+        </div>
+      ))}
+    </fieldset>
+  );
+}

@@ -200,24 +200,64 @@ Pagination query: `page`, `limit`, `sortBy`, `sortOrder`.
 
 ### `GET /admin/subscription-plans/:id`
 
-`:id` — plan id (e.g. `free`, `family_pro_monthly`).
+`:id` — plan UUID.
 
 ### `POST /admin/subscription-plans`
 
 **Body**
 
-| Field | Type | Required |
-|-------|------|----------|
-| `id` | string | yes |
-| `title` | object | no |
-| `subtitle` | object | no |
-| `periodShort` | object | no |
-| `badge` | object | no |
-| `features` | object | no |
-| `productId` | string \| null | no |
-| `sort` | number | no |
-| `limitsVersion` | number | no |
-| `limits` | object | no |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string (UUID) | yes | Plan unique identifier |
+| `title` | object | no | Localized title: `{ en, ar, de }` |
+| `subtitle` | object | no | Localized subtitle: `{ en, ar, de }` |
+| `periodShort` | object | no | Localized period text: `{ en, ar, de }` (e.g., "/month") |
+| `badge` | object | no | Localized badge: `{ en, ar, de }` (e.g., "Popular") |
+| `features` | object | no | Localized features array: `{ en: string[], ar: string[], de: string[] }` |
+| `productId` | string \| null | no | Stripe product/price ID |
+| `sort` | number | no | Sort order (lower = first). Highlighted plan typically has sort=1 |
+| `limitsVersion` | number | no | Limits version number |
+| `limits` | object | no | Plan limits: `{ users, tasks, rewards, ... }` |
+
+**Example**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": {
+    "en": "Family Pro",
+    "ar": "العائلة برو",
+    "de": "Familie Pro"
+  },
+  "subtitle": {
+    "en": "Perfect for growing families",
+    "ar": "مثالي للعائلات المتنامية",
+    "de": "Perfekt für wachsende Familien"
+  },
+  "badge": {
+    "en": "Popular",
+    "ar": "الأكثر شيوعاً",
+    "de": "Beliebt"
+  },
+  "periodShort": {
+    "en": "/month",
+    "ar": "/شهر",
+    "de": "/Monat"
+  },
+  "features": {
+    "en": ["Up to 10 family members", "Unlimited tasks", "Priority support"],
+    "ar": ["حتى 10 أفراد من العائلة", "مهام غير محدودة", "دعم أولوية"],
+    "de": ["Bis zu 10 Familienmitglieder", "Unbegrenzte Aufgaben", "Prioritäts-Support"]
+  },
+  "productId": "price_1234567890",
+  "sort": 1,
+  "limits": {
+    "users": 10,
+    "tasks": 1000,
+    "rewards": 50
+  }
+}
+```
 
 ### `PATCH /admin/subscription-plans/:id`
 

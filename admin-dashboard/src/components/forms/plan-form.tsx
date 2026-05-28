@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { fromLocaleMap, toLocaleMap } from '@/lib/i18n';
-import { LocaleTextFields } from '@/components/ui/locale-fields';
+import { fromLocaleMap, toLocaleMap, type LocaleCode } from '@/lib/i18n';
+import { LocaleTextFields, LocaleArrayFields } from '@/components/ui/locale-fields';
 import { Alert, Field, FormActions, inputClass } from '@/components/ui/form';
 import type { SubscriptionPlan } from '@/lib/types';
 
@@ -18,11 +18,12 @@ export type PlanFormValues = {
   subtitle: ReturnType<typeof fromLocaleMap>;
   periodShort: ReturnType<typeof fromLocaleMap>;
   badge: ReturnType<typeof fromLocaleMap>;
+  features: Record<LocaleCode, string[]>;
 };
 
 export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
   const limits = (plan?.limits ?? {}) as Record<string, number>;
-  const features = (plan?.features ?? {}) as { backendId?: string };
+  const features = (plan?.features ?? {}) as { backendId?: string; en?: string[]; ar?: string[]; de?: string[] };
   return {
     backendId: features.backendId ?? '',
     sort: String(plan?.sort ?? ''),
@@ -35,6 +36,11 @@ export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
     subtitle: fromLocaleMap(plan?.subtitle as Record<string, string>),
     periodShort: fromLocaleMap(plan?.periodShort as Record<string, string>),
     badge: fromLocaleMap(plan?.badge as Record<string, string>),
+    features: {
+      en: features.en ?? [],
+      ar: features.ar ?? [],
+      de: features.de ?? [],
+    },
   };
 }
 
@@ -43,6 +49,18 @@ export function formToPlanPayload(values: PlanFormValues, id: string) {
   if (values.members) limits.members = Number(values.members);
   if (values.rewardsPerDay) limits.rewardsPerDay = Number(values.rewardsPerDay);
   if (values.tasksPerDay) limits.tasksPerDay = Number(values.tasksPerDay);
+
+  const features: Record<string, any> = {
+    backendId: values.backendId.trim() || undefined,
+    billing: values.backendId.includes('yearly') ? 'yearly' : values.backendId.includes('monthly') ? 'monthly' : 'none',
+  };
+
+  // Add localized features if any exist
+  if (values.features.en?.length || values.features.ar?.length || values.features.de?.length) {
+    features.en = values.features.en;
+    features.ar = values.features.ar;
+    features.de = values.features.de;
+  }
 
   return {
     id,
@@ -54,10 +72,7 @@ export function formToPlanPayload(values: PlanFormValues, id: string) {
     subtitle: toLocaleMap(values.subtitle),
     periodShort: toLocaleMap(values.periodShort),
     badge: toLocaleMap(values.badge),
-    features: {
-      backendId: values.backendId.trim() || undefined,
-      billing: values.backendId.includes('yearly') ? 'yearly' : values.backendId.includes('monthly') ? 'monthly' : 'none',
-    },
+    features,
   };
 }
 
@@ -78,12 +93,21 @@ export function PlanForm({
 }) {
   const [values, setValues] = useState(initial);
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Prevent Enter from submitting form in input fields
+    // Allow Enter to work normally in textarea
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+      e.preventDefault();
+    }
+  };
+
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(values);
       }}
+      onKeyDown={handleKeyDown}
       className="space-y-4"
     >
       {error && <Alert message={error} />}
@@ -132,6 +156,12 @@ export function PlanForm({
         label="الشارة"
         values={values.badge}
         onChange={(loc, v) => setValues({ ...values, badge: { ...values.badge, [loc]: v } })}
+      />
+      <LocaleArrayFields
+        label="المميزات"
+        values={values.features}
+        onChange={(loc, items) => setValues({ ...values, features: { ...values.features, [loc]: items } })}
+        hint="أدخل كل ميزة في سطر جديد"
       />
       <fieldset className="grid gap-3 rounded-xl border border-slate-100 p-4 sm:grid-cols-3">
         <legend className="px-1 text-sm font-medium text-slate-700">الحدود (limits)</legend>

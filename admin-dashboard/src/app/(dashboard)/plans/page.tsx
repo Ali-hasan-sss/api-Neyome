@@ -14,7 +14,7 @@ type ModalMode = 'create' | 'edit' | null;
 
 export default function PlansPage() {
   const { data, loading, error, reload } = useAdminFetch<Paginated<SubscriptionPlan>>(
-    '/admin/subscription-plans?limit=50',
+    '/admin/subscription-plans?limit=50&sortBy=sort&sortOrder=ASC',
   );
   const { saving, error: crudError, create, update, remove, clearError } = useCrudActions();
   const [modal, setModal] = useState<ModalMode>(null);
@@ -30,6 +30,17 @@ export default function PlansPage() {
     if (!confirm(`حذف الخطة "${(plan.features as { backendId?: string })?.backendId ?? plan.id}"؟`)) return;
     const ok = await remove(`/admin/subscription-plans/${plan.id}`);
     if (ok) reload();
+  };
+
+  const getFeatures = (plan: SubscriptionPlan, locale: string = 'ar') => {
+    const features = plan.features as { en?: string[]; ar?: string[]; de?: string[] } || {};
+    return features[locale as keyof typeof features] || features.en || [];
+  };
+
+  const getLocalizedText = (field: any, locale: string = 'ar') => {
+    if (!field) return '';
+    if (typeof field === 'string') return field;
+    return field[locale] || field.en || '';
   };
 
   return (
@@ -52,29 +63,81 @@ export default function PlansPage() {
       {error && <p className="text-red-600">{error}</p>}
 
       {data && (
-        <div className="space-y-3">
-          {data.items.map((plan) => (
-            <article
-              key={plan.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <div>
-                <p className="font-mono text-xs text-indigo-600">
-                  {(plan.features as { backendId?: string })?.backendId ?? plan.id}
-                </p>
-                <h2 className="mt-1 font-semibold">{plan.title?.ar ?? plan.title?.en ?? '—'}</h2>
-                <p className="text-sm text-slate-500">ترتيب: {plan.sort ?? '—'}</p>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {data.items.map((plan) => {
+            const isHighlight = plan.sort === 1;
+            const title = getLocalizedText(plan.title);
+            const subtitle = getLocalizedText(plan.subtitle);
+            const badge = getLocalizedText(plan.badge);
+            const features = getFeatures(plan);
+            const periodShort = getLocalizedText(plan.periodShort);
+
+            return (
+              <div
+                key={plan.id}
+                className={[
+                  'relative rounded-2xl p-6 transition-all duration-300',
+                  isHighlight
+                    ? 'shadow-xl text-white bg-gradient-to-br from-violet-600 to-cyan-500'
+                    : 'bg-white/70 backdrop-blur shadow-md border border-slate-200',
+                ].join(' ')}
+              >
+                {/* Header row */}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xl font-semibold">{title || '—'}</h3>
+                  {badge && (
+                    <span
+                      className={[
+                        'ms-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium',
+                        isHighlight ? 'bg-white/15 text-white' : 'bg-emerald-50 text-emerald-600',
+                      ].join(' ')}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                </div>
+
+                {/* Subtitle */}
+                {subtitle && (
+                  <p className={`text-sm mb-4 ${isHighlight ? 'text-white/80' : 'text-gray-600'}`}>
+                    {subtitle}
+                  </p>
+                )}
+
+                {/* Features */}
+                <ul
+                  className={`mt-5 space-y-2 text-sm leading-6 ${
+                    isHighlight ? 'text-white/90' : 'text-gray-700'
+                  }`}
+                >
+                  {features.map((f, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span aria-hidden className="mt-1">✅</span>
+                      <span className="text-start">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Footer with actions */}
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-xs opacity-70">
+                    <span className="font-mono">
+                      {(plan.features as { backendId?: string })?.backendId || plan.id}
+                    </span>
+                    {periodShort && <span className="ms-2">{periodShort}</span>}
+                  </div>
+                  <RowActions
+                    onEdit={() => {
+                      clearError();
+                      setSelected(plan);
+                      setModal('edit');
+                    }}
+                    onDelete={() => handleDelete(plan)}
+                  />
+                </div>
               </div>
-              <RowActions
-                onEdit={() => {
-                  clearError();
-                  setSelected(plan);
-                  setModal('edit');
-                }}
-                onDelete={() => handleDelete(plan)}
-              />
-            </article>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -85,7 +148,7 @@ export default function PlansPage() {
         wide
       >
         <PlanForm
-          key={modal === 'create' ? 'new' : selected?.id}
+          key={modal === 'create' ? 'create' : `edit-${selected?.id}`}
           initial={planToForm(modal === 'edit' ? selected ?? undefined : undefined)}
           isCreate={modal === 'create'}
           loading={saving}
