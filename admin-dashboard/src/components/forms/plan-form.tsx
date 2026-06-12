@@ -9,6 +9,8 @@ import type { SubscriptionPlan } from '@/lib/types';
 export type PlanFormValues = {
   backendId: string;
   sort: string;
+  price: string;
+  currency: string;
   productId: string;
   limitsVersion: string;
   members: string;
@@ -27,6 +29,8 @@ export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
   return {
     backendId: features.backendId ?? '',
     sort: String(plan?.sort ?? ''),
+    price: plan?.price != null && plan.price !== '' ? String(plan.price) : '',
+    currency: plan?.currency ?? 'USD',
     productId: plan?.productId ?? '',
     limitsVersion: String(plan?.limitsVersion ?? 1),
     members: String(limits.members ?? ''),
@@ -65,6 +69,8 @@ export function formToPlanPayload(values: PlanFormValues, id: string) {
   return {
     id,
     sort: values.sort ? Number(values.sort) : undefined,
+    price: values.price !== '' ? Number(values.price) : null,
+    currency: values.currency.trim().toUpperCase() || 'USD',
     productId: values.productId || null,
     limitsVersion: values.limitsVersion ? Number(values.limitsVersion) : undefined,
     limits: Object.keys(limits).length ? limits : undefined,
@@ -134,6 +140,26 @@ export function PlanForm({
             className={inputClass}
             value={values.productId}
             onChange={(e) => setValues({ ...values, productId: e.target.value })}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="السعر" hint="اتركه فارغًا للخطط المجانية">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className={inputClass}
+            value={values.price}
+            onChange={(e) => setValues({ ...values, price: e.target.value })}
+          />
+        </Field>
+        <Field label="العملة" hint="مثل: USD, EUR, SAR">
+          <input
+            className={inputClass}
+            maxLength={3}
+            value={values.currency}
+            onChange={(e) => setValues({ ...values, currency: e.target.value.toUpperCase() })}
           />
         </Field>
       </div>

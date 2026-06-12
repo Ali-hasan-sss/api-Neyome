@@ -43,6 +43,13 @@ export default function PlansPage() {
     return field[locale] || field.en || '';
   };
 
+  const formatPrice = (plan: SubscriptionPlan) => {
+    if (plan.price == null || plan.price === '') return 'مجاني';
+    const amount = Number(plan.price);
+    if (Number.isNaN(amount)) return '—';
+    return `${amount} ${(plan.currency ?? 'USD').toUpperCase()}`;
+  };
+
   return (
     <div>
       <PageHeader title="خطط الاشتراك" description="إضافة وتعديل وحذف خطط الأسعار">
@@ -99,10 +106,19 @@ export default function PlansPage() {
 
                 {/* Subtitle */}
                 {subtitle && (
-                  <p className={`text-sm mb-4 ${isHighlight ? 'text-white/80' : 'text-gray-600'}`}>
+                  <p className={`text-sm mb-2 ${isHighlight ? 'text-white/80' : 'text-gray-600'}`}>
                     {subtitle}
                   </p>
                 )}
+
+                <p className={`text-2xl font-bold mb-4 ${isHighlight ? 'text-white' : 'text-violet-700'}`}>
+                  {formatPrice(plan)}
+                  {periodShort && (
+                    <span className={`ms-1 text-sm font-medium ${isHighlight ? 'text-white/80' : 'text-gray-500'}`}>
+                      / {periodShort}
+                    </span>
+                  )}
+                </p>
 
                 {/* Features */}
                 <ul

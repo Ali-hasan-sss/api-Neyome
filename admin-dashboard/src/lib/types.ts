@@ -46,6 +46,8 @@ export interface SubscriptionPlan {
   badge?: Record<string, string>;
   features?: Record<string, unknown>;
   productId?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
   sort?: number;
   limitsVersion?: number;
   limits?: Record<string, unknown>;
