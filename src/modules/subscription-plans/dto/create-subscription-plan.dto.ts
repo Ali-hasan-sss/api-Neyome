@@ -1,4 +1,4 @@
-import { IsInt, IsArray, IsOptional, IsString, IsUUID, IsObject, ValidateNested } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, IsObject, ValidateNested, IsNumber, Length, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -63,6 +63,19 @@ export class CreateSubscriptionPlanDto {
     ar?: string[];
     de?: string[];
   };
+
+  @ApiPropertyOptional({ example: 9.99, description: 'Display price set by admin' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  price?: number | null;
+
+  @ApiPropertyOptional({ example: 'USD', description: 'ISO 4217 currency code' })
+  @IsOptional()
+  @IsString()
+  @Length(3, 3)
+  currency?: string | null;
 
   @ApiPropertyOptional({ example: 1, description: 'Sort order (lower = first). Highlighted plan typically has sort=1' })
   @IsOptional()

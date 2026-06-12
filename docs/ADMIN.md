@@ -214,6 +214,8 @@ Pagination query: `page`, `limit`, `sortBy`, `sortOrder`.
 | `periodShort` | object | no | Localized period text: `{ en, ar, de }` (e.g., "/month") |
 | `badge` | object | no | Localized badge: `{ en, ar, de }` (e.g., "Popular") |
 | `features` | object | no | Localized features array: `{ en: string[], ar: string[], de: string[] }` |
+| `price` | number \| null | no | Display price for landing page (e.g. `9.99`). Use `0` or omit for free plans |
+| `currency` | string | no | ISO 4217 code (e.g. `USD`, `EUR`, `SAR`). Default: `USD` |
 | `productId` | string \| null | no | Stripe product/price ID |
 | `sort` | number | no | Sort order (lower = first). Highlighted plan typically has sort=1 |
 | `limitsVersion` | number | no | Limits version number |

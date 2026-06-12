@@ -88,19 +88,21 @@ GET /public/subscription-plans?page=1&limit=50
     "items": [
       {
         "id": "...",
-        "name": "Free",
+        "title": { "en": "Free", "ar": "مجاني", "de": "Free" },
         "price": 0,
         "currency": "USD",
-        "interval": "month",
+        "periodShort": { "en": "month", "ar": "شهر", "de": "Monat" },
         "features": {
           "backendId": "free",
-          "maxUsers": 5,
-          "maxTasks": 100
+          "en": ["Up to 3 family members", "Basic tasks"],
+          "ar": ["حتى 3 أفراد", "مهام أساسية"]
         },
         "limits": {
-          "users": 5,
-          "tasks": 100
-        }
+          "members": 4,
+          "tasksPerDay": 10,
+          "rewardsPerDay": 10
+        },
+        "sort": 0
       }
     ],
     "total": 3,

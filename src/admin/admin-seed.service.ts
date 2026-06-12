@@ -166,6 +166,8 @@ export class AdminSeedService {
         sort: p.sort as number,
         title: p.title,
         periodShort: p.periodShort,
+        price: p.price != null ? Number(p.price) : null,
+        currency: (p.currency as string) ?? 'USD',
         limitsVersion: (extra?.limitsVersion ?? p.limitsVersion) as number,
         limits: extra?.limits ?? p.limits,
       });

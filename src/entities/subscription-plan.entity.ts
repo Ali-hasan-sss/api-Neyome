@@ -36,6 +36,14 @@ export class SubscriptionPlan {
   @Column({ type: 'jsonb', nullable: true })
   subtitle?: any;
 
+  @ApiPropertyOptional({ example: 9.99, description: 'Display price set by admin (marketing/landing page)' })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  price?: number | null;
+
+  @ApiPropertyOptional({ example: 'USD', description: 'ISO 4217 currency code (e.g. USD, EUR, SAR)' })
+  @Column({ type: 'varchar', length: 3, nullable: true, default: 'USD' })
+  currency?: string | null;
+
   @ApiPropertyOptional({ example: 1, description: 'Sort order (lower = first). Highlighted plan typically has sort=1' })
   @Column({ type: 'integer', nullable: true })
   sort?: number;
