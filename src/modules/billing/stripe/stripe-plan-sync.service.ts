@@ -55,45 +55,26 @@ export class StripePlanSyncService {
     const unitAmount = Math.round(Number(plan.price) * 100);
 
     const existingStripe = (existing?.features as PlanFeatures | undefined)?.stripe;
-    let stripeProductId =
+    const candidateProductId =
       existingStripe?.productId ??
       (merged.productId?.startsWith('prod_') ? merged.productId : undefined);
 
-    if (stripeProductId) {
-      await this.stripe.products.update(stripeProductId, {
-        name: productName,
-        active: true,
-        metadata: { planId: plan.id, backendId },
-      });
-    } else {
-      const product = await this.stripe.products.create({
-        name: productName,
-        metadata: { planId: plan.id, backendId },
-      });
-      stripeProductId = product.id;
-    }
+    const stripeProductId = await this.ensureProduct(candidateProductId, {
+      name: productName,
+      metadata: { planId: plan.id, backendId },
+    });
 
     const priceChanged = this.hasPriceChanged(merged, existing, interval, currency, unitAmount);
-    let stripePriceId = existingStripe?.priceId;
 
-    if (!stripePriceId || priceChanged) {
-      if (existingStripe?.priceId) {
-        try {
-          await this.stripe.prices.update(existingStripe.priceId, { active: false });
-        } catch (err) {
-          this.logger.warn(`Could not archive old Stripe price ${existingStripe.priceId}: ${err}`);
-        }
-      }
-
-      const price = await this.stripe.prices.create({
-        product: stripeProductId,
-        unit_amount: unitAmount,
-        currency,
-        recurring: { interval },
-        metadata: { planId: plan.id, backendId },
-      });
-      stripePriceId = price.id;
-    }
+    const stripePriceId = await this.ensurePrice({
+      currentPriceId: existingStripe?.priceId,
+      productId: stripeProductId,
+      unitAmount,
+      currency,
+      interval,
+      forceNew: priceChanged,
+      metadata: { planId: plan.id, backendId },
+    });
 
     return {
       productId: stripeProductId,
@@ -102,6 +83,82 @@ export class StripePlanSyncService {
         stripe: { productId: stripeProductId, priceId: stripePriceId },
       },
     };
+  }
+
+  private isResourceMissing(err: unknown): boolean {
+    return (
+      err instanceof Stripe.errors.StripeInvalidRequestError &&
+      (err.code === 'resource_missing' || err.statusCode === 404)
+    );
+  }
+
+  /** Update the product if it exists; otherwise create a new one (handles stale/foreign product ids). */
+  private async ensureProduct(
+    productId: string | undefined,
+    data: { name: string; metadata: Record<string, string> },
+  ): Promise<string> {
+    const stripe = this.stripe!;
+
+    if (productId) {
+      try {
+        await stripe.products.update(productId, {
+          name: data.name,
+          active: true,
+          metadata: data.metadata,
+        });
+        return productId;
+      } catch (err) {
+        if (!this.isResourceMissing(err)) throw err;
+        this.logger.warn(
+          `Stripe product ${productId} not found on this account. Creating a new product.`,
+        );
+      }
+    }
+
+    const product = await stripe.products.create({
+      name: data.name,
+      metadata: data.metadata,
+    });
+    return product.id;
+  }
+
+  /** Reuse the existing price when valid; otherwise archive it (best-effort) and create a fresh one. */
+  private async ensurePrice(params: {
+    currentPriceId?: string;
+    productId: string;
+    unitAmount: number;
+    currency: string;
+    interval: 'month' | 'year';
+    forceNew: boolean;
+    metadata: Record<string, string>;
+  }): Promise<string> {
+    const stripe = this.stripe!;
+    const { currentPriceId, productId, unitAmount, currency, interval, forceNew, metadata } = params;
+
+    if (currentPriceId && !forceNew) {
+      try {
+        const price = await stripe.prices.retrieve(currentPriceId);
+        if (price.active) return currentPriceId;
+      } catch (err) {
+        if (!this.isResourceMissing(err)) throw err;
+        this.logger.warn(`Stripe price ${currentPriceId} not found. Creating a new price.`);
+      }
+    } else if (currentPriceId && forceNew) {
+      try {
+        await stripe.prices.update(currentPriceId, { active: false });
+      } catch (err) {
+        this.logger.warn(`Could not archive old Stripe price ${currentPriceId}: ${err}`);
+      }
+    }
+
+    const price = await stripe.prices.create({
+      product: productId,
+      unit_amount: unitAmount,
+      currency,
+      recurring: { interval },
+      metadata,
+    });
+    return price.id;
   }
 
   async deactivatePlanStripe(plan: SubscriptionPlan): Promise<void> {
