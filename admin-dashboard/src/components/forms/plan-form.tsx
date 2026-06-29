@@ -11,7 +11,6 @@ export type PlanFormValues = {
   sort: string;
   price: string;
   currency: string;
-  productId: string;
   limitsVersion: string;
   members: string;
   rewardsPerDay: string;
@@ -21,17 +20,28 @@ export type PlanFormValues = {
   periodShort: ReturnType<typeof fromLocaleMap>;
   badge: ReturnType<typeof fromLocaleMap>;
   features: Record<LocaleCode, string[]>;
+  stripeProductId?: string;
+  stripePriceId?: string;
 };
 
 export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
   const limits = (plan?.limits ?? {}) as Record<string, number>;
-  const features = (plan?.features ?? {}) as { backendId?: string; en?: string[]; ar?: string[]; de?: string[] };
+  const features = (plan?.features ?? {}) as {
+    backendId?: string;
+    stripe?: { productId?: string; priceId?: string };
+    en?: string[];
+    ar?: string[];
+    de?: string[];
+  };
+  const stripeProductId =
+    features.stripe?.productId ?? (plan?.productId?.startsWith('prod_') ? plan.productId : undefined);
+  const stripePriceId =
+    features.stripe?.priceId ?? (plan?.productId?.startsWith('price_') ? plan.productId : undefined);
   return {
     backendId: features.backendId ?? '',
     sort: String(plan?.sort ?? ''),
     price: plan?.price != null && plan.price !== '' ? String(plan.price) : '',
     currency: plan?.currency ?? 'USD',
-    productId: plan?.productId ?? '',
     limitsVersion: String(plan?.limitsVersion ?? 1),
     members: String(limits.members ?? ''),
     rewardsPerDay: String(limits.rewardsPerDay ?? ''),
@@ -45,6 +55,8 @@ export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
       ar: features.ar ?? [],
       de: features.de ?? [],
     },
+    stripeProductId,
+    stripePriceId,
   };
 }
 
@@ -71,7 +83,6 @@ export function formToPlanPayload(values: PlanFormValues, id: string) {
     sort: values.sort ? Number(values.sort) : undefined,
     price: values.price !== '' ? Number(values.price) : null,
     currency: values.currency.trim().toUpperCase() || 'USD',
-    productId: values.productId || null,
     limitsVersion: values.limitsVersion ? Number(values.limitsVersion) : undefined,
     limits: Object.keys(limits).length ? limits : undefined,
     title: toLocaleMap(values.title),
@@ -117,7 +128,7 @@ export function PlanForm({
       className="space-y-4"
     >
       {error && <Alert message={error} />}
-      <Field label="معرّف الخطة (backendId)" hint="مثل: free أو family_pro_monthly">
+      <Field label="معرّف الخطة (backendId)" hint="مثل: free أو family_pro_monthly — يُستخدم لتحديد فترة الفوترة في Stripe">
         <input
           className={inputClass}
           required={isCreate}
@@ -135,14 +146,20 @@ export function PlanForm({
             onChange={(e) => setValues({ ...values, sort: e.target.value })}
           />
         </Field>
-        <Field label="productId">
-          <input
-            className={inputClass}
-            value={values.productId}
-            onChange={(e) => setValues({ ...values, productId: e.target.value })}
-          />
-        </Field>
+        {!isCreate && (values.stripeProductId || values.stripePriceId) && (
+          <Field label="Stripe" hint="يُنشأ تلقائياً عند الحفظ">
+            <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600">
+              {values.stripeProductId && <p>Product: {values.stripeProductId}</p>}
+              {values.stripePriceId && <p>Price: {values.stripePriceId}</p>}
+            </div>
+          </Field>
+        )}
       </div>
+      {isCreate && values.price && Number(values.price) > 0 && values.backendId !== 'free' && (
+        <p className="text-sm text-slate-600">
+          سيتم إنشاء منتج وسعر في Stripe تلقائياً عند حفظ الخطة.
+        </p>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="السعر" hint="اتركه فارغًا للخطط المجانية">
           <input

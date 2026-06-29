@@ -27,6 +27,13 @@ export class StripeBillingService {
     });
   }
 
+  private resolveStripePriceId(plan: { productId?: string | null; features?: unknown }): string | null {
+    const stripeMeta = (plan.features as { stripe?: { priceId?: string } } | undefined)?.stripe;
+    if (stripeMeta?.priceId) return stripeMeta.priceId;
+    if (plan.productId?.startsWith('price_')) return plan.productId;
+    return null;
+  }
+
   private getBaseUrl(): string {
     return (
       this.configService.get<string>('APP_BASE_URL') ||
@@ -47,8 +54,8 @@ export class StripeBillingService {
     const plan = await this.subscriptionPlansService.findByBackendId(params.backendPlanId);
     if (!plan) throw new BadRequestException('Unknown plan');
 
-    const stripePriceId = (plan.features as any)?.stripe?.priceId;
-    if (!stripePriceId || typeof stripePriceId !== 'string') {
+    const stripePriceId = this.resolveStripePriceId(plan);
+    if (!stripePriceId) {
       throw new BadRequestException('Stripe priceId is not configured for this plan');
     }
 

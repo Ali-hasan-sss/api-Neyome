@@ -25,7 +25,7 @@ export class SubscriptionPlan {
   @Column({ type: 'jsonb', nullable: true })
   features?: any;
 
-  @ApiPropertyOptional({ example: 'price_1234567890', description: 'Stripe product/price ID' })
+  @ApiPropertyOptional({ example: 'prod_1234567890', description: 'Stripe product ID (set automatically on save)' })
   @Column({ type: 'text', nullable: true })
   productId?: string | null;
 

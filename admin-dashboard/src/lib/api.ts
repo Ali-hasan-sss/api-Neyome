@@ -40,6 +40,45 @@ export async function apiRequest<T>(
   return (body as ApiEnvelope<T>).data;
 }
 
+export async function apiMultipartRequest<T>(
+  path: string,
+  formData: FormData,
+  options: { token?: string | null; method?: string } = {},
+): Promise<T> {
+  const { token, method = 'PATCH', ...rest } = options;
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    ...rest,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  let body: ApiEnvelope<T> | { message?: string };
+  try {
+    body = await res.json();
+  } catch {
+    throw new ApiError('Invalid JSON response', res.status);
+  }
+
+  if (!res.ok || !(body as ApiEnvelope<T>).success) {
+    throw new ApiError((body as ApiEnvelope<T>).message ?? 'Request failed', res.status);
+  }
+
+  return (body as ApiEnvelope<T>).data;
+}
+
+export interface UserProfile {
+  id: string;
+  name?: string;
+  email?: string;
+  profileImageUrl?: string | null;
+  locale?: string;
+  emojiOption?: number;
+  isAdmin?: boolean;
+}
+
 export const adminApi = {
   login: (email: string, password: string) =>
     apiRequest<{ accessToken: string; user: { id: string; email?: string; name?: string } }>(
@@ -47,7 +86,12 @@ export const adminApi = {
       { method: 'POST', body: JSON.stringify({ email, password }) },
     ),
 
-  me: (token: string) => apiRequest<Record<string, unknown>>('/admin/auth/me', { token }),
+  me: (token: string) => apiRequest<UserProfile>('/admin/auth/me', { token }),
+
+  userMe: (token: string) => apiRequest<UserProfile>('/users/me', { token }),
+
+  updateMe: (token: string, formData: FormData) =>
+    apiMultipartRequest<UserProfile>('/users/me', formData, { token, method: 'PATCH' }),
 
   links: (token: string) =>
     apiRequest<{ sections: import('./types').AdminNavLink[] }>('/admin/links', { token }),

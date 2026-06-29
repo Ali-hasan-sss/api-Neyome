@@ -82,7 +82,7 @@ export class CreateSubscriptionPlanDto {
   @IsInt()
   sort?: number;
 
-  @ApiPropertyOptional({ example: 'price_1234567890', description: 'Stripe product/price ID' })
+  @ApiPropertyOptional({ example: 'prod_1234567890', description: 'Stripe product ID (set automatically on save)' })
   @IsOptional()
   @IsString()
   productId?: string | null;

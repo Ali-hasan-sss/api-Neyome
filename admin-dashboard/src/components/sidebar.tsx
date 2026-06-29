@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useI18n } from '@/hooks/use-i18n';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { LogoutIcon, NavIcon } from '@/components/nav-icon';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { NAV_FOOTER, NAV_SECTIONS, isNavActive, type NavItem } from '@/lib/navigation';
 
 function NavLink({
@@ -54,13 +55,18 @@ export function Sidebar({
     >
       <header className="sidebar-header">
         <div className="sidebar-brand">
-          <div className="sidebar-brand-icon" aria-hidden>
-            <span className="text-lg font-bold text-white">N</span>
-          </div>
+          <UserAvatar
+            src={user?.profileImageUrl}
+            name={user?.name ?? user?.email}
+            size="sm"
+            cacheBust={user?.profileImageVersion}
+            className="ring-white/20"
+          />
           <div className="min-w-0 flex-1">
             <p className="sidebar-brand-tag">{t('app.brand')}</p>
             <h1 className="sidebar-brand-title">{t('app.title')}</h1>
-            {user?.email && <p className="sidebar-brand-email">{user.email}</p>}
+            {user?.name && <p className="sidebar-brand-email truncate">{user.name}</p>}
+            {user?.email && <p className="sidebar-brand-email truncate text-white/70">{user.email}</p>}
           </div>
         </div>
         <button

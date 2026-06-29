@@ -1,16 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Raw, Repository } from 'typeorm';
 import { SubscriptionPlan } from '../../entities/subscription-plan.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateSubscriptionPlanDto } from './dto/create-subscription-plan.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
+import { StripePlanSyncService } from '../billing/stripe/stripe-plan-sync.service';
 
 @Injectable()
 export class SubscriptionPlansService {
+  private readonly logger = new Logger(SubscriptionPlansService.name);
+
   constructor(
     @InjectRepository(SubscriptionPlan)
     private readonly repo: Repository<SubscriptionPlan>,
+    private readonly stripePlanSync: StripePlanSyncService,
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -46,17 +50,35 @@ export class SubscriptionPlansService {
   }
 
   async create(dto: CreateSubscriptionPlanDto) {
-    const entity = this.repo.create(dto as any);
+    const { productId: _ignored, ...rest } = dto;
+    this.logger.log(`Creating plan ${rest.id} (backendId=${(rest.features as any)?.backendId}, price=${rest.price})`);
+    const stripeData = await this.stripePlanSync.syncPlan(rest as SubscriptionPlan);
+    this.logger.log(`Stripe sync result for ${rest.id}: productId=${stripeData.productId}`);
+    const entity = this.repo.create({
+      ...rest,
+      productId: stripeData.productId,
+      features: stripeData.features,
+    } as any);
     return await this.repo.save(entity);
   }
 
   async update(id: string, dto: UpdateSubscriptionPlanDto) {
     const existing = await this.findOne(id);
-    Object.assign(existing, dto);
+    const { productId: _ignored, ...rest } = dto;
+    const merged = { ...existing, ...rest };
+    this.logger.log(`Updating plan ${id} (backendId=${(merged.features as any)?.backendId}, price=${merged.price})`);
+    const stripeData = await this.stripePlanSync.syncPlan(merged, existing);
+    this.logger.log(`Stripe sync result for ${id}: productId=${stripeData.productId}`);
+    Object.assign(existing, rest, {
+      productId: stripeData.productId,
+      features: stripeData.features,
+    });
     return await this.repo.save(existing);
   }
 
   async remove(id: string) {
+    const existing = await this.findOne(id);
+    await this.stripePlanSync.deactivatePlanStripe(existing);
     await this.repo.softDelete(id);
     return { id };
   }

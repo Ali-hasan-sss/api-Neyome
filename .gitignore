@@ -1,4 +1,9 @@
 node_modules
 dist
-.env*firebase-adminsdk*.json
+.env
+.env.*
+!.env.example
+firebase-adminsdk*.json
 serviceAccountKey.json
+uploads/avatars/*
+!uploads/avatars/.gitkeep

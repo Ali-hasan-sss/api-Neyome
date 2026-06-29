@@ -8,6 +8,7 @@ import { PlanForm, formToPlanPayload, planToForm } from '@/components/forms/plan
 import { useAdminFetch } from '@/hooks/use-admin-fetch';
 import { useCrudActions } from '@/hooks/use-crud-actions';
 import { stableUuidSync } from '@/lib/stable-id';
+import { isPlanStripeIntegrated, planRequiresStripe } from '@/lib/plan-stripe';
 import type { Paginated, SubscriptionPlan } from '@/lib/types';
 
 type ModalMode = 'create' | 'edit' | null;
@@ -78,6 +79,8 @@ export default function PlansPage() {
             const badge = getLocalizedText(plan.badge);
             const features = getFeatures(plan);
             const periodShort = getLocalizedText(plan.periodShort);
+            const showStripeStatus = planRequiresStripe(plan);
+            const stripeIntegrated = isPlanStripeIntegrated(plan);
 
             return (
               <div
@@ -119,6 +122,24 @@ export default function PlansPage() {
                     </span>
                   )}
                 </p>
+
+                {showStripeStatus && (
+                  <div
+                    className={[
+                      'mb-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
+                      stripeIntegrated
+                        ? isHighlight
+                          ? 'bg-white/15 text-white'
+                          : 'bg-emerald-50 text-emerald-700'
+                        : isHighlight
+                          ? 'bg-red-500/20 text-white'
+                          : 'bg-red-50 text-red-700',
+                    ].join(' ')}
+                  >
+                    <span aria-hidden>{stripeIntegrated ? '✓' : '✕'}</span>
+                    <span>{stripeIntegrated ? 'متكامل مع سترايب' : 'لم يتم التكامل'}</span>
+                  </div>
+                )}
 
                 {/* Features */}
                 <ul

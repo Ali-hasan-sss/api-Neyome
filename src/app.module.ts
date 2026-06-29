@@ -32,7 +32,10 @@ import { PublicModule } from './public/public.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     AuthModule,
-    ServeStaticModule.forRoot({ rootPath: join(__dirname, '..', 'public'), serveRoot: '/' }),
+    ServeStaticModule.forRoot(
+      { rootPath: join(__dirname, '..', 'public'), serveRoot: '/' },
+      { rootPath: join(__dirname, '..', 'uploads'), serveRoot: '/uploads' },
+    ),
     TypeOrmModule.forRoot(typeOrmConfig),
     UsersModule,
     TasksModule,
