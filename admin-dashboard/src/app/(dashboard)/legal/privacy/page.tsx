@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Modal } from '@/components/ui/modal';
 import { LegalPageForm, legalFormToPayload, pageToLegalForm } from '@/components/forms/legal-page-form';
+import { RichHtml } from '@/components/ui/rich-html';
 import { useAdminFetch } from '@/hooks/use-admin-fetch';
 import { useCrudActions } from '@/hooks/use-crud-actions';
 import type { CmsPage } from '@/lib/types';
@@ -41,9 +42,12 @@ export default function PrivacyPage() {
               <section key={loc}>
                 <h3 className="text-sm font-semibold uppercase text-indigo-600">{loc}</h3>
                 <h4 className="mt-2 font-medium">{data.locales?.[loc]?.title ?? '—'}</h4>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-                  {data.locales?.[loc]?.body ?? '—'}
-                </p>
+                <div className="rich-html-preview mt-2 text-sm">
+                  <RichHtml
+                    html={data.locales?.[loc]?.body ?? ''}
+                    dir={loc === 'ar' ? 'rtl' : 'ltr'}
+                  />
+                </div>
               </section>
             ))}
           </div>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { fromLocaleContent, toLocaleContent } from '@/lib/i18n';
-import { LocaleContentFields } from '@/components/ui/locale-fields';
+import { LocaleRichContentFields } from '@/components/ui/locale-rich-content-fields';
 import { Alert, Field, FormActions, inputClass } from '@/components/ui/form';
 import type { CmsPage } from '@/lib/types';
 
@@ -50,7 +50,7 @@ export function LegalPageForm({
         />
       </Field>
       <div className="mt-4">
-        <LocaleContentFields
+        <LocaleRichContentFields
           values={values.locales}
           onChange={(loc, field, v) =>
             setValues({

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-page-type="privacy">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Neyome</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" />
+  <link rel="stylesheet" href="/legal-page.css" />
+</head>
+<body>
+  <div class="legal-shell">
+    <header class="legal-header">
+      <div class="legal-brand">
+        <div class="legal-brand-icon" aria-hidden="true">N</div>
+        <div>
+          <div class="legal-brand-title">Neyome</div>
+          <div class="legal-brand-sub">Privacy Policy</div>
+        </div>
+      </div>
+      <nav class="legal-lang-switch" aria-label="Language">
+        <button type="button" class="legal-lang-btn" data-lang="ar">العربية</button>
+        <button type="button" class="legal-lang-btn" data-lang="en">English</button>
+        <button type="button" class="legal-lang-btn" data-lang="de">Deutsch</button>
+      </nav>
+    </header>
+
+    <div id="legal-loading" class="legal-loading">Loading…</div>
+    <div id="legal-error" class="legal-error" hidden></div>
+
+    <article id="legal-card" class="legal-card" hidden>
+      <p id="legal-version" class="legal-meta"></p>
+      <h1 id="legal-title" class="legal-title"></h1>
+      <div id="legal-body" class="legal-body ql-snow">
+        <div class="ql-editor"></div>
+      </div>
+    </article>
+
+    <footer class="legal-footer">
+      <a href="/terms.html">Terms of Use</a>
+      ·
+      <a href="/privacy.html">Privacy Policy</a>
+    </footer>
+  </div>
+
+  <script src="/legal-page.js"></script>
+</body>
+</html>

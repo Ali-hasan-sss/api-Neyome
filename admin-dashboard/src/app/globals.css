@@ -511,3 +511,45 @@ textarea,
 button {
   font: inherit;
 }
+
+/* ——— Quill rich text editor ——— */
+.quill-editor-wrap .legal-quill .ql-container,
+.quill-editor-wrap .legal-quill .ql-editor {
+  min-height: var(--quill-min-height, 200px);
+  font-size: 0.95rem;
+}
+
+.quill-editor-wrap .ql-toolbar {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  background: #f8fafc;
+}
+
+.quill-editor-wrap .ql-container {
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+.rich-html-preview .ql-editor {
+  padding: 0;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.rich-html-preview .ql-editor h1,
+.rich-html-preview .ql-editor h2,
+.rich-html-preview .ql-editor h3 {
+  color: #0f172a;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+
+.rich-html-preview .ql-editor p {
+  margin-bottom: 0.75em;
+}
+
+.rich-html-preview .ql-editor ul,
+.rich-html-preview .ql-editor ol {
+  margin-bottom: 0.75em;
+  padding-inline-start: 1.5em;
+}
