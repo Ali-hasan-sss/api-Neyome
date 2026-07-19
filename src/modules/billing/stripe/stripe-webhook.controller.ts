@@ -1,5 +1,5 @@
 import { Controller, Headers, Post, Req } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiHeader, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiHeader, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../../auth/public.decorator';
 import { StripeBillingService } from './stripe-billing.service';
 
@@ -10,6 +10,10 @@ export class StripeWebhookController {
 
   @Public()
   @Post('webhook')
+  @ApiOperation({
+    summary: 'Stripe webhook',
+    description: 'Stripe server-to-server webhook. Not for mobile clients.',
+  })
   @ApiHeader({
     name: 'stripe-signature',
     required: true,

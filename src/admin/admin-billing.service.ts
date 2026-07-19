@@ -38,6 +38,12 @@ export class AdminBillingService {
         familyName: family.name,
         familyCode: family.familyCode,
         backendPlanId: plan.backendId ?? 'free',
+        status: plan.status ?? (plan.backendId === 'free' || !plan.backendId ? 'free' : 'active'),
+        autoRenew: plan.autoRenew ?? false,
+        cancelAtPeriodEnd: plan.cancelAtPeriodEnd ?? false,
+        currentPeriodStart: plan.currentPeriodStart ?? null,
+        currentPeriodEnd: plan.currentPeriodEnd ?? null,
+        stripeSubscriptionId: plan.stripeSubscriptionId ?? null,
         planUpdatedAt: plan.updatedAt,
         assignedByAdmin: plan.assignedByAdmin ?? false,
         owner: owner

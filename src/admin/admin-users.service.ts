@@ -119,10 +119,22 @@ export class AdminUsersService {
     const family = await this.familyRepo.findOne({ where: { id: user.familyId } });
     if (!family) throw new NotFoundException('Family not found');
 
+    const isFree = backendPlanId === 'free';
     family.plan = {
       ...(family.plan || {}),
       backendId: backendPlanId,
+      status: isFree ? 'free' : 'active',
       assignedByAdmin: true,
+      autoRenew: false,
+      cancelAtPeriodEnd: false,
+      // Admin assign is not Stripe-billed; keep existing Stripe ids only when staying on same paid plan
+      ...(isFree
+        ? {
+            stripeSubscriptionId: null,
+            currentPeriodStart: null,
+            currentPeriodEnd: null,
+          }
+        : {}),
       updatedAt: new Date().toISOString(),
     };
     return await this.familyRepo.save(family);
