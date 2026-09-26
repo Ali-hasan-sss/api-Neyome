@@ -52,7 +52,7 @@ export class AdminUsersController {
 
   @Patch(':id/family-plan')
   assignPlan(@Param('id') id: string, @Body() dto: AdminAssignFamilyPlanDto) {
-    return this.adminUsersService.assignFamilyPlan(id, dto.backendPlanId).then((data) => ({
+    return this.adminUsersService.assignFamilyPlan(id, dto.backendPlanId, dto.interval).then((data) => ({
       success: true,
       data,
       message: 'Family plan assigned',

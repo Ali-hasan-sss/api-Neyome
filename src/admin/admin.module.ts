@@ -29,6 +29,7 @@ import { AdminCmsController } from './controllers/admin-cms.controller';
 import { AdminBillingController } from './controllers/admin-billing.controller';
 import { AdminUsersService } from './admin-users.service';
 import { AdminBillingService } from './admin-billing.service';
+import { StripeBillingModule } from '../modules/billing/stripe/stripe-billing.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AdminBillingService } from './admin-billing.service';
     UsersModule,
     PagesModule,
     SubscriptionPlansModule,
+    StripeBillingModule,
     SupportFaqsModule,
     SupportCategoriesModule,
     SupportRequestsModule,

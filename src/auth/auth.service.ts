@@ -16,6 +16,8 @@ import { Family } from '../entities/family.entity';
 import { SubscriptionPlansService } from '../modules/subscription-plans/subscription-plans.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
+import { GoogleAuthService } from './google-auth.service';
 import { CreateFamilyMemberDto } from './dto/create-family-member.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -47,6 +49,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly subscriptionPlansService: SubscriptionPlansService,
+    private readonly googleAuth: GoogleAuthService,
   ) {}
 
   /**
@@ -140,6 +143,105 @@ export class AuthService {
     // Remove sensitive fields
     const { password, magicLinkToken, ...safeUser } = user;
 
+    return { user: safeUser, accessToken };
+  }
+
+  /**
+   * Sign in or register a parent from a Google ID token (Flutter SDK).
+   * Lookup is by verified email. Response matches POST /auth/login.
+   */
+  async loginWithGoogle(dto: GoogleLoginDto): Promise<{ user: Partial<User>; accessToken: string }> {
+    const idToken = typeof dto.idToken === 'string' ? dto.idToken.trim() : '';
+    if (!idToken) {
+      throw new BadRequestException('idToken is required');
+    }
+
+    const decoded = await this.googleAuth.verifyIdToken(idToken);
+    const email = decoded.email!.trim().toLowerCase();
+    const displayName = typeof decoded.name === 'string' ? decoded.name.trim() : '';
+    const picture = typeof decoded.picture === 'string' ? decoded.picture : undefined;
+
+    const existing = await this.userRepo
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', { email })
+      .getOne();
+
+    if (existing) {
+      if (existing.isParent !== true) {
+        throw new ForbiddenException('Account not permitted');
+      }
+
+      const patch: Partial<User> = {};
+      if (!existing.name && displayName) patch.name = displayName;
+      if (!existing.profileImageUrl && picture) patch.profileImageUrl = picture;
+      if (Object.keys(patch).length > 0) {
+        patch.updatedAt = new Date();
+        await this.userRepo.update(existing.id, patch);
+        Object.assign(existing, patch);
+      }
+
+      return this.issueParentToken(existing);
+    }
+
+    const name = displayName || email.split('@')[0];
+    const userId = crypto.randomUUID();
+
+    const family = await this.createFamilyWithUniqueCode({
+      id: crypto.randomUUID(),
+      name: `${name}'s Family`,
+      creatorId: userId,
+      ownerId: userId,
+      createdAt: new Date(),
+      plan: { backendId: 'free' },
+    });
+
+    const user = this.userRepo.create({
+      id: userId,
+      email,
+      name,
+      profileImageUrl: picture,
+      isParent: true,
+      familyId: family.id,
+      familyCode: family.familyCode,
+      locale: 'en',
+      points: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    try {
+      await this.userRepo.save(user);
+    } catch (err: any) {
+      if (!this.isUniqueConstraintError(err)) {
+        throw err;
+      }
+      const raced = await this.userRepo
+        .createQueryBuilder('user')
+        .where('LOWER(user.email) = :email', { email })
+        .getOne();
+      if (!raced || raced.isParent !== true) {
+        throw new ForbiddenException('Account not permitted');
+      }
+      return this.issueParentToken(raced);
+    }
+
+    return this.issueParentToken(user);
+  }
+
+  private issueParentToken(user: User): { user: Partial<User>; accessToken: string } {
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      isParent: true,
+      familyId: user.familyId,
+    };
+    const accessToken = this.jwtService.sign(payload);
+    const { password, magicLinkToken, pinHash, devicePinEnc, ...safeUser } = user as User & {
+      password?: string;
+      magicLinkToken?: string;
+      pinHash?: string;
+      devicePinEnc?: string | null;
+    };
     return { user: safeUser, accessToken };
   }
 

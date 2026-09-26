@@ -18,6 +18,8 @@ export interface FamilyPlanState {
   currentPeriodStart?: string | null;
   /** ISO timestamp — synced from Stripe current_period_end (renewal time) */
   currentPeriodEnd?: string | null;
+  /** month | year — the Stripe recurring interval for this activation */
+  billingInterval?: 'month' | 'year' | null;
   cancelAtPeriodEnd?: boolean;
   /** true when Stripe will renew at currentPeriodEnd (!cancelAtPeriodEnd) */
   autoRenew?: boolean;

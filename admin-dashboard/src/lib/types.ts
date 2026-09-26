@@ -47,6 +47,8 @@ export interface SubscriptionPlan {
   features?: Record<string, unknown>;
   productId?: string | null;
   price?: number | string | null;
+  monthlyPrice?: number | string | null;
+  yearlyPrice?: number | string | null;
   currency?: string | null;
   sort?: number;
   limitsVersion?: number;

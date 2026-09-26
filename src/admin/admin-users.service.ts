@@ -11,6 +11,9 @@ import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
 import { Family } from '../entities/family.entity';
 import { SubscriptionPlansService } from '../modules/subscription-plans/subscription-plans.service';
+import { StripeBillingService } from '../modules/billing/stripe/stripe-billing.service';
+import { inferBillingInterval } from '../modules/billing/stripe/billing-period';
+import { resolvePlanPrices } from '../modules/billing/stripe/plan-prices';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 
 @Injectable()
@@ -21,6 +24,7 @@ export class AdminUsersService {
     @InjectRepository(Family)
     private readonly familyRepo: Repository<Family>,
     private readonly subscriptionPlansService: SubscriptionPlansService,
+    private readonly stripeBillingService: StripeBillingService,
   ) {}
 
   async createUser(dto: AdminCreateUserDto): Promise<Partial<User>> {
@@ -103,7 +107,7 @@ export class AdminUsersService {
     await this.userRepo.save(user);
   }
 
-  async assignFamilyPlan(userId: string, backendPlanId: string): Promise<Family> {
+  async assignFamilyPlan(userId: string, backendPlanId: string, interval?: string): Promise<Family> {
     const user = await this.userRepo.findOne({
       where: { id: userId },
       relations: { family: true },
@@ -120,21 +124,24 @@ export class AdminUsersService {
     if (!family) throw new NotFoundException('Family not found');
 
     const isFree = backendPlanId === 'free';
+    const billingInterval = isFree ? null : inferBillingInterval(backendPlanId, interval);
+    if (!isFree && billingInterval) {
+      const prices = resolvePlanPrices(plan);
+      if (billingInterval === 'month' && prices.monthly == null) {
+        throw new BadRequestException('Monthly price is not set for this plan');
+      }
+      if (billingInterval === 'year' && prices.yearly == null) {
+        throw new BadRequestException('Yearly price is not set for this plan');
+      }
+    }
+
+    const period = await this.stripeBillingService.alignAssignedPeriod(family, plan, billingInterval);
     family.plan = {
       ...(family.plan || {}),
+      ...period,
       backendId: backendPlanId,
-      status: isFree ? 'free' : 'active',
-      assignedByAdmin: true,
-      autoRenew: false,
-      cancelAtPeriodEnd: false,
-      // Admin assign is not Stripe-billed; keep existing Stripe ids only when staying on same paid plan
-      ...(isFree
-        ? {
-            stripeSubscriptionId: null,
-            currentPeriodStart: null,
-            currentPeriodEnd: null,
-          }
-        : {}),
+      status: period.status ?? (isFree ? 'free' : 'active'),
+      assignedByAdmin: !period.stripeSubscriptionId,
       updatedAt: new Date().toISOString(),
     };
     return await this.familyRepo.save(family);

@@ -36,9 +36,20 @@ export class SubscriptionPlan {
   @Column({ type: 'jsonb', nullable: true })
   subtitle?: any;
 
-  @ApiPropertyOptional({ example: 9.99, description: 'Display price set by admin (marketing/landing page)' })
+  @ApiPropertyOptional({
+    example: 9.99,
+    description: 'Legacy display price. Prefer monthlyPrice and yearlyPrice.',
+  })
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   price?: number | null;
+
+  @ApiPropertyOptional({ example: 9.99, description: 'Monthly price synced to a Stripe monthly price' })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  monthlyPrice?: number | null;
+
+  @ApiPropertyOptional({ example: 99.99, description: 'Yearly price synced to a Stripe yearly price' })
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  yearlyPrice?: number | null;
 
   @ApiPropertyOptional({ example: 'USD', description: 'ISO 4217 currency code (e.g. USD, EUR, SAR)' })
   @Column({ type: 'varchar', length: 3, nullable: true, default: 'USD' })

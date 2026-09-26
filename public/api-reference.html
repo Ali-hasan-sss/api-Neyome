@@ -187,6 +187,7 @@
       <div class="sub">App auth</div>
       <a href="#auth-register">Register</a>
       <a href="#auth-login">Login</a>
+      <a href="#auth-google">Google sign-in</a>
       <a href="#auth-forgot">Forgot password</a>
       <a href="#auth-reset">Reset password</a>
       <a href="#auth-change-email">Change email</a>
@@ -339,6 +340,37 @@ Accept-Language: en</code></pre>
           <span class="path">/auth/login</span>
         </div>
         <pre><span class="label">Request body</span><code>{ "email": "parent@example.com", "password": "SecurePass123" }</code></pre>
+      </article>
+
+      <article class="endpoint" id="auth-google">
+        <div class="endpoint-header">
+          <span class="method post">POST</span>
+          <span class="path">/auth/login/google</span>
+        </div>
+        <p class="desc">
+          Flutter posts the raw <strong>Google ID token</strong> (audience = web client ID).
+          The API verifies it with <code>google-auth-library</code>, then returns the same
+          <code>{ accessToken, user }</code> shape as <code>POST /auth/login</code>.
+          Full notes: <code>docs/AUTH-GOOGLE.md</code>.
+        </p>
+        <pre><span class="label">Request body</span><code>{
+  "idToken": "&lt;google-id-token&gt;"
+}</code></pre>
+        <pre><span class="label">Response</span><code>{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "accessToken": "eyJhbG...",
+    "user": {
+      "id": "...",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "isParent": true,
+      "familyId": "...",
+      "profileImageUrl": "https://..."
+    }
+  }
+}</code></pre>
       </article>
 
       <article class="endpoint" id="auth-forgot">
@@ -517,7 +549,7 @@ GET                    /admin/links</code></pre>
       </div>
 
       <p class="desc" style="margin-top:2rem">
-        See also: <code>docs/FAMILY-CHILD-PIN.md</code>, <code>docs/AUTH-EMAIL-CHANGE.md</code>,
+        See also: <code>docs/FAMILY-CHILD-PIN.md</code>, <code>docs/AUTH-GOOGLE.md</code>, <code>docs/AUTH-EMAIL-CHANGE.md</code>,
         <code>docs/API-PUBLIC.md</code>, <code>docs/ADMIN.md</code>, <code>docs/SEEDING.md</code>
       </p>
     </main>

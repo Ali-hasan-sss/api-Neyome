@@ -41,7 +41,7 @@ async function bootstrap() {
     )
     .setVersion('1.0.0')
     .addTag('Public', 'No authentication — FAQs, privacy, terms')
-    .addTag('Auth', 'App users — register, login, family, email change')
+    .addTag('Auth', 'App users — register, login, Google sign-in, family, email change')
     .addTag('Admin Auth', 'Admin dashboard authentication')
     .addTag('Admin Users', 'Admin dashboard — user management')
     .addTag('Admin CMS', 'Admin dashboard — CMS CRUD')

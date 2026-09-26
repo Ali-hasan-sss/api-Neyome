@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AdminCreateUserDto {
@@ -35,4 +35,13 @@ export class AdminAssignFamilyPlanDto {
   @ApiProperty({ example: 'family_pro_monthly' })
   @IsString()
   backendPlanId: string;
+
+  @ApiPropertyOptional({
+    enum: ['month', 'year', 'monthly', 'yearly'],
+    example: 'month',
+    description: 'Billing period. The end date uses Stripe calendar month/year rules.',
+  })
+  @IsOptional()
+  @IsIn(['month', 'year', 'monthly', 'yearly'])
+  interval?: 'month' | 'year' | 'monthly' | 'yearly';
 }

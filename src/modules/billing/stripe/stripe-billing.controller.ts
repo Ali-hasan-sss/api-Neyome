@@ -162,7 +162,8 @@ Requires an existing active Stripe subscription. Returns the updated subscriptio
 Creates a Stripe Checkout Session (subscription mode) for the parent family.
 
 - Only **one** active paid subscription per family is allowed (409 if already subscribed).
-- After payment, webhooks activate the plan and sync period dates from Stripe.
+- \`interval\` selects the monthly or yearly Stripe price on that plan.
+- After payment, webhooks copy \`current_period_start\` / \`current_period_end\` from Stripe. The server does not invent a different day count.
 - Open \`data.url\` in the mobile browser / WebView to complete payment.
     `,
   })
@@ -189,6 +190,7 @@ Creates a Stripe Checkout Session (subscription mode) for the parent family.
     const data = await this.stripeBillingService.createCheckoutSession({
       familyId,
       backendPlanId: body.backendPlanId,
+      interval: body.interval,
       successUrl: body.successUrl,
       cancelUrl: body.cancelUrl,
     });

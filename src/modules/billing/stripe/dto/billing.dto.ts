@@ -13,11 +13,21 @@ export class SetAutoRenewDto {
 
 export class CreateCheckoutSessionDto {
   @ApiProperty({
-    enum: ['family_pro_monthly', 'family_pro_yearly'],
     example: 'family_pro_monthly',
+    description: 'Plan backendId. monthlyPrice or yearlyPrice on that plan is selected by interval.',
   })
-  @IsIn(['family_pro_monthly', 'family_pro_yearly'])
-  backendPlanId: 'family_pro_monthly' | 'family_pro_yearly';
+  @IsString()
+  backendPlanId: string;
+
+  @ApiPropertyOptional({
+    enum: ['month', 'year', 'monthly', 'yearly'],
+    example: 'month',
+    description:
+      'Billing period. Omitted values are inferred from backendPlanId (_monthly / _yearly). Period end is Stripe current_period_end.',
+  })
+  @IsOptional()
+  @IsIn(['month', 'year', 'monthly', 'yearly'])
+  interval?: 'month' | 'year' | 'monthly' | 'yearly';
 
   @ApiPropertyOptional({ example: 'https://app.neyome.com/billing/success' })
   @IsOptional()

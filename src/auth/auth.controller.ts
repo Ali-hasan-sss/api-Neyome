@@ -19,6 +19,7 @@ import { AuthService } from './auth.service';
 import {
   RegisterDto,
   LoginDto,
+  GoogleLoginDto,
   CreateFamilyMemberDto,
   FamilyCodeMembersDto,
   FamilyCodeChildSignInDto,
@@ -95,6 +96,47 @@ Returns a JWT access token valid for 7 days (configurable via JWT_EXPIRES_IN env
   })
   async login(@Body() dto: LoginDto) {
     const data = await this.authService.login(dto);
+    return { success: true, data, message: 'Login successful' };
+  }
+
+  @Post('login/google')
+  @ApiOperation({
+    summary: 'Sign in or register with Google',
+    description: `
+Parent sign-in for the Flutter app. No auth header.
+
+**Client flow:**
+1. User taps Sign in with Google (native account picker).
+2. Google SDK returns a signed ID token (JWT, audience = web client ID).
+3. App posts the raw \`idToken\` to this endpoint.
+
+**Server:**
+- Verifies the token with \`google-auth-library\` (Google public certs, audience = \`GOOGLE_WEB_CLIENT_ID\`).
+- Finds or creates a parent by the verified **email** (not Google \`sub\`).
+- Returns the same \`{ accessToken, user }\` shape as \`POST /auth/login\`.
+
+See \`docs/AUTH-GOOGLE.md\`.
+    `,
+  })
+  @ApiBody({ type: GoogleLoginDto })
+  @ApiOkResponse({
+    description: 'Same payload shape as POST /auth/login',
+    type: LoginResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Missing or empty idToken',
+    schema: { example: { success: false, message: 'idToken is required' } },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token invalid, expired, wrong audience, or email not verified',
+    schema: { example: { success: false, message: 'Invalid Google token' } },
+  })
+  @ApiForbiddenResponse({
+    description: 'Email belongs to a non-parent account',
+    schema: { example: { success: false, message: 'Account not permitted' } },
+  })
+  async loginWithGoogle(@Body() dto: GoogleLoginDto) {
+    const data = await this.authService.loginWithGoogle(dto);
     return { success: true, data, message: 'Login successful' };
   }
 

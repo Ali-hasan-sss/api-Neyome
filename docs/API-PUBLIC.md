@@ -90,6 +90,8 @@ GET /public/subscription-plans?page=1&limit=50
         "id": "...",
         "title": { "en": "Free", "ar": "مجاني", "de": "Free" },
         "price": 0,
+        "monthlyPrice": null,
+        "yearlyPrice": null,
         "currency": "USD",
         "periodShort": { "en": "month", "ar": "شهر", "de": "Monat" },
         "features": {

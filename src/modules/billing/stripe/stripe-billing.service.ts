@@ -17,6 +17,9 @@ import {
   isPaidActivePlan,
   unixToIso,
 } from './family-plan.types';
+import { addStripeBillingPeriod, inferBillingInterval, type BillingInterval } from './billing-period';
+import { resolvePlanPrices, stripePriceIdForInterval } from './plan-prices';
+import { SubscriptionPlan } from '../../../entities/subscription-plan.entity';
 
 @Injectable()
 export class StripeBillingService {
@@ -39,11 +42,95 @@ export class StripeBillingService {
     });
   }
 
-  private resolveStripePriceId(plan: { productId?: string | null; features?: unknown }): string | null {
-    const stripeMeta = (plan.features as { stripe?: { priceId?: string } } | undefined)?.stripe;
-    if (stripeMeta?.priceId) return stripeMeta.priceId;
-    if (plan.productId?.startsWith('price_')) return plan.productId;
+  private resolveStripePriceId(
+    plan: Pick<SubscriptionPlan, 'productId' | 'features' | 'price' | 'monthlyPrice' | 'yearlyPrice'>,
+    interval: BillingInterval,
+  ): string | null {
+    return stripePriceIdForInterval(plan, interval);
+  }
+
+  private readBillingInterval(sub: Stripe.Subscription): BillingInterval | undefined {
+    const fromPrice = sub.items?.data?.[0]?.price?.recurring?.interval;
+    if (fromPrice === 'month' || fromPrice === 'year') return fromPrice;
+    const fromMeta = (sub.metadata as { billingInterval?: string } | null)?.billingInterval;
+    if (fromMeta === 'month' || fromMeta === 'year') return fromMeta;
+    return undefined;
+  }
+
+  private async findPlanForCheckout(backendPlanId: string) {
+    const direct = await this.subscriptionPlansService.findByBackendId(backendPlanId);
+    if (direct) return direct;
+
+    const aliases = [
+      backendPlanId.replace(/_(yearly|annual|monthly)$/i, ''),
+      backendPlanId.replace(/_(yearly|annual)$/i, '_monthly'),
+      backendPlanId.replace(/_monthly$/i, '_yearly'),
+    ].filter((id) => id && id !== backendPlanId);
+
+    for (const id of aliases) {
+      const plan = await this.subscriptionPlansService.findByBackendId(id);
+      if (plan) return plan;
+    }
     return null;
+  }
+
+  /**
+   * Activate a plan period.
+   * If the family already has a Stripe subscription, the subscription item is
+   * switched to that interval's price and the stored period is copied from
+   * Stripe's current_period_start / current_period_end.
+   * Otherwise the end date is computed with Stripe's calendar month/year rules.
+   */
+  async alignAssignedPeriod(
+    family: Family,
+    plan: SubscriptionPlan,
+    interval: BillingInterval | null,
+  ): Promise<Partial<FamilyPlanState>> {
+    if (!interval) {
+      return {
+        billingInterval: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        autoRenew: false,
+        cancelAtPeriodEnd: false,
+        stripeSubscriptionId: null,
+      };
+    }
+
+    const backendId = (plan.features as { backendId?: string } | undefined)?.backendId;
+    const priceId = this.resolveStripePriceId(plan, interval);
+    const current = this.getPlan(family);
+
+    if (current.stripeSubscriptionId) {
+      if (!priceId) {
+        throw new BadRequestException('Stripe price is not configured for this plan interval');
+      }
+      const sub = await this.stripe.subscriptions.retrieve(current.stripeSubscriptionId);
+      const item = sub.items.data[0];
+      if (!item) throw new BadRequestException('Stripe subscription has no items');
+
+      const updated = await this.stripe.subscriptions.update(current.stripeSubscriptionId, {
+        items: [{ id: item.id, price: priceId }],
+        proration_behavior: 'none',
+        metadata: {
+          ...sub.metadata,
+          familyId: family.id,
+          backendPlanId: backendId ?? current.backendId,
+          billingInterval: interval,
+        },
+      });
+      return this.buildPlanFromStripeSubscription(updated, backendId);
+    }
+
+    const start = new Date();
+    const end = addStripeBillingPeriod(start, interval);
+    return {
+      billingInterval: interval,
+      currentPeriodStart: start.toISOString(),
+      currentPeriodEnd: end.toISOString(),
+      autoRenew: false,
+      cancelAtPeriodEnd: false,
+    };
   }
 
   private getBaseUrl(): string {
@@ -107,6 +194,7 @@ export class StripeBillingService {
       stripeSubscriptionId: sub.id,
       currentPeriodStart: unixToIso(sub.current_period_start),
       currentPeriodEnd: unixToIso(sub.current_period_end),
+      billingInterval: this.readBillingInterval(sub) ?? null,
       cancelAtPeriodEnd,
       autoRenew: isActive ? !cancelAtPeriodEnd : false,
     };
@@ -137,7 +225,8 @@ export class StripeBillingService {
 
   async createCheckoutSession(params: {
     familyId: string;
-    backendPlanId: 'family_pro_monthly' | 'family_pro_yearly';
+    backendPlanId: string;
+    interval?: string;
     successUrl?: string;
     cancelUrl?: string;
   }): Promise<{ url: string; sessionId: string }> {
@@ -173,12 +262,23 @@ export class StripeBillingService {
       });
     }
 
-    const plan = await this.subscriptionPlansService.findByBackendId(params.backendPlanId);
+    const interval = inferBillingInterval(params.backendPlanId, params.interval);
+    const plan = await this.findPlanForCheckout(params.backendPlanId);
     if (!plan) throw new BadRequestException('Unknown plan');
 
-    const stripePriceId = this.resolveStripePriceId(plan);
+    const backendPlanId =
+      (plan.features as { backendId?: string } | undefined)?.backendId?.trim() || params.backendPlanId;
+    const prices = resolvePlanPrices(plan);
+    if (interval === 'month' && prices.monthly == null) {
+      throw new BadRequestException('Monthly price is not configured for this plan');
+    }
+    if (interval === 'year' && prices.yearly == null) {
+      throw new BadRequestException('Yearly price is not configured for this plan');
+    }
+
+    const stripePriceId = this.resolveStripePriceId(plan, interval);
     if (!stripePriceId) {
-      throw new BadRequestException('Stripe priceId is not configured for this plan');
+      throw new BadRequestException('Stripe price is not configured for this plan interval');
     }
 
     const baseUrl = this.getBaseUrl();
@@ -195,12 +295,14 @@ export class StripeBillingService {
       subscription_data: {
         metadata: {
           familyId: family.id,
-          backendPlanId: params.backendPlanId,
+          backendPlanId,
+          billingInterval: interval,
         },
       },
       metadata: {
         familyId: family.id,
-        backendPlanId: params.backendPlanId,
+        backendPlanId,
+        billingInterval: interval,
       },
     };
 
@@ -240,6 +342,7 @@ export class StripeBillingService {
 
     const catalog = await this.subscriptionPlansService.findByBackendId(planState.backendId);
     const limits = await this.subscriptionPlansService.getLimitsByBackendId(planState.backendId);
+    const prices = catalog ? resolvePlanPrices(catalog) : { monthly: null, yearly: null };
     const isActive = planState.backendId === 'free' || isPaidActivePlan(planState);
 
     return {
@@ -254,6 +357,7 @@ export class StripeBillingService {
       /** Same instant Stripe will renew / end the period */
       renewsAt: planState.autoRenew ? (planState.currentPeriodEnd ?? null) : null,
       endsAt: planState.cancelAtPeriodEnd ? (planState.currentPeriodEnd ?? null) : null,
+      billingInterval: planState.billingInterval ?? null,
       stripeCustomerId: planState.stripeCustomerId ?? null,
       stripeSubscriptionId: planState.stripeSubscriptionId ?? null,
       assignedByAdmin: planState.assignedByAdmin ?? false,
@@ -264,7 +368,9 @@ export class StripeBillingService {
             title: catalog.title,
             subtitle: catalog.subtitle,
             badge: catalog.badge,
-            price: catalog.price,
+            price: prices.monthly ?? prices.yearly ?? catalog.price,
+            monthlyPrice: prices.monthly,
+            yearlyPrice: prices.yearly,
             currency: catalog.currency,
             periodShort: catalog.periodShort,
             features: catalog.features,

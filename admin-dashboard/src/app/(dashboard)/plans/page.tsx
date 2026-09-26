@@ -8,7 +8,7 @@ import { PlanForm, formToPlanPayload, planToForm } from '@/components/forms/plan
 import { useAdminFetch } from '@/hooks/use-admin-fetch';
 import { useCrudActions } from '@/hooks/use-crud-actions';
 import { stableUuidSync } from '@/lib/stable-id';
-import { isPlanStripeIntegrated, planRequiresStripe } from '@/lib/plan-stripe';
+import { isPlanStripeIntegrated, planPricePair, planRequiresStripe } from '@/lib/plan-stripe';
 import type { Paginated, SubscriptionPlan } from '@/lib/types';
 
 type ModalMode = 'create' | 'edit' | null;
@@ -44,11 +44,16 @@ export default function PlansPage() {
     return field[locale] || field.en || '';
   };
 
+  const formatAmount = (amount: number | null, currency: string) =>
+    amount == null ? null : `${amount} ${currency}`;
+
   const formatPrice = (plan: SubscriptionPlan) => {
-    if (plan.price == null || plan.price === '') return 'مجاني';
-    const amount = Number(plan.price);
-    if (Number.isNaN(amount)) return '—';
-    return `${amount} ${(plan.currency ?? 'USD').toUpperCase()}`;
+    const currency = (plan.currency ?? 'USD').toUpperCase();
+    const prices = planPricePair(plan);
+    const monthly = formatAmount(prices.monthly, currency);
+    const yearly = formatAmount(prices.yearly, currency);
+    if (!monthly && !yearly) return 'مجاني';
+    return [monthly ? `${monthly} / شهر` : null, yearly ? `${yearly} / سنة` : null].filter(Boolean).join(' · ');
   };
 
   return (
@@ -114,13 +119,8 @@ export default function PlansPage() {
                   </p>
                 )}
 
-                <p className={`text-2xl font-bold mb-4 ${isHighlight ? 'text-white' : 'text-violet-700'}`}>
+                <p className={`text-lg font-bold mb-4 ${isHighlight ? 'text-white' : 'text-violet-700'}`}>
                   {formatPrice(plan)}
-                  {periodShort && (
-                    <span className={`ms-1 text-sm font-medium ${isHighlight ? 'text-white/80' : 'text-gray-500'}`}>
-                      / {periodShort}
-                    </span>
-                  )}
                 </p>
 
                 {showStripeStatus && (

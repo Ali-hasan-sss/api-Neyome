@@ -17,7 +17,7 @@ export function AssignPlanForm({
 }: {
   userName: string;
   currentPlanId?: string;
-  onSubmit: (backendPlanId: string) => void;
+  onSubmit: (payload: { backendPlanId: string; interval: 'month' | 'year' }) => void;
   onCancel: () => void;
   loading?: boolean;
   error?: string | null;
@@ -26,6 +26,9 @@ export function AssignPlanForm({
   const token = useAuthStore((s) => s.token);
   const [plans, setPlans] = useState<{ id: string; label: string }[]>([]);
   const [backendPlanId, setBackendPlanId] = useState(currentPlanId ?? 'free');
+  const [interval, setInterval] = useState<'month' | 'year'>(
+    /yearly|annual/i.test(currentPlanId ?? '') ? 'year' : 'month',
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -45,7 +48,7 @@ export function AssignPlanForm({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(backendPlanId);
+        onSubmit({ backendPlanId, interval: backendPlanId === 'free' ? 'month' : interval });
       }}
       className="space-y-4"
     >
@@ -66,6 +69,18 @@ export function AssignPlanForm({
           ))}
         </select>
       </Field>
+      {backendPlanId !== 'free' && (
+        <Field label="الفترة" hint="تُحسب بنفس دورة سترايب: شهر تقويمي أو سنة تقويمية، وليس 30 أو 365 يوماً ثابتاً">
+          <select
+            className={inputClass}
+            value={interval}
+            onChange={(e) => setInterval(e.target.value as 'month' | 'year')}
+          >
+            <option value="month">شهرية</option>
+            <option value="year">سنوية</option>
+          </select>
+        </Field>
+      )}
       <FormActions onCancel={onCancel} loading={loading} submitLabel={t('users.assignPlan')} />
     </form>
   );

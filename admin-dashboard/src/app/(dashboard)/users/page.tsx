@@ -271,8 +271,11 @@ export default function UsersPage() {
             loading={saving}
             error={crudError}
             onCancel={closeModal}
-            onSubmit={async (backendPlanId) => {
-              const ok = await update(`/admin/users/${selected.id}/family-plan`, { backendPlanId });
+            onSubmit={async ({ backendPlanId, interval }) => {
+              const ok = await update(`/admin/users/${selected.id}/family-plan`, {
+                backendPlanId,
+                ...(backendPlanId === 'free' ? {} : { interval }),
+              });
               if (ok) {
                 closeModal();
                 reload();

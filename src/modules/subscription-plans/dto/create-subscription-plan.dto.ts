@@ -64,12 +64,26 @@ export class CreateSubscriptionPlanDto {
     de?: string[];
   };
 
-  @ApiPropertyOptional({ example: 9.99, description: 'Display price set by admin' })
+  @ApiPropertyOptional({ example: 9.99, description: 'Legacy display price. Prefer monthlyPrice and yearlyPrice.' })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @Type(() => Number)
   price?: number | null;
+
+  @ApiPropertyOptional({ example: 9.99, description: 'Monthly price. Synced to Stripe as a monthly recurring price.' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  monthlyPrice?: number | null;
+
+  @ApiPropertyOptional({ example: 99.99, description: 'Yearly price. Synced to Stripe as a yearly recurring price.' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  yearlyPrice?: number | null;
 
   @ApiPropertyOptional({ example: 'USD', description: 'ISO 4217 currency code' })
   @IsOptional()

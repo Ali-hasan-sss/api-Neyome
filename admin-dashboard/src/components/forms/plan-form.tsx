@@ -9,7 +9,8 @@ import type { SubscriptionPlan } from '@/lib/types';
 export type PlanFormValues = {
   backendId: string;
   sort: string;
-  price: string;
+  monthlyPrice: string;
+  yearlyPrice: string;
   currency: string;
   limitsVersion: string;
   members: string;
@@ -21,26 +22,45 @@ export type PlanFormValues = {
   badge: ReturnType<typeof fromLocaleMap>;
   features: Record<LocaleCode, string[]>;
   stripeProductId?: string;
-  stripePriceId?: string;
+  stripeMonthlyPriceId?: string;
+  stripeYearlyPriceId?: string;
 };
 
 export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
   const limits = (plan?.limits ?? {}) as Record<string, number>;
   const features = (plan?.features ?? {}) as {
     backendId?: string;
-    stripe?: { productId?: string; priceId?: string };
+    billing?: string;
+    stripe?: { productId?: string; priceId?: string; monthlyPriceId?: string; yearlyPriceId?: string };
     en?: string[];
     ar?: string[];
     de?: string[];
   };
+  const yearlyLegacy =
+    features.billing === 'yearly' || /yearly|annual/i.test(features.backendId ?? '');
+  const legacyPrice = plan?.price != null && plan.price !== '' ? String(plan.price) : '';
   const stripeProductId =
     features.stripe?.productId ?? (plan?.productId?.startsWith('prod_') ? plan.productId : undefined);
-  const stripePriceId =
-    features.stripe?.priceId ?? (plan?.productId?.startsWith('price_') ? plan.productId : undefined);
+  const stripeMonthlyPriceId =
+    features.stripe?.monthlyPriceId ??
+    (!yearlyLegacy ? features.stripe?.priceId ?? (plan?.productId?.startsWith('price_') ? plan.productId : undefined) : undefined);
+  const stripeYearlyPriceId =
+    features.stripe?.yearlyPriceId ?? (yearlyLegacy ? features.stripe?.priceId : undefined);
   return {
     backendId: features.backendId ?? '',
     sort: String(plan?.sort ?? ''),
-    price: plan?.price != null && plan.price !== '' ? String(plan.price) : '',
+    monthlyPrice:
+      plan?.monthlyPrice != null && plan.monthlyPrice !== ''
+        ? String(plan.monthlyPrice)
+        : !yearlyLegacy
+          ? legacyPrice
+          : '',
+    yearlyPrice:
+      plan?.yearlyPrice != null && plan.yearlyPrice !== ''
+        ? String(plan.yearlyPrice)
+        : yearlyLegacy
+          ? legacyPrice
+          : '',
     currency: plan?.currency ?? 'USD',
     limitsVersion: String(plan?.limitsVersion ?? 1),
     members: String(limits.members ?? ''),
@@ -56,7 +76,8 @@ export function planToForm(plan?: SubscriptionPlan): PlanFormValues {
       de: features.de ?? [],
     },
     stripeProductId,
-    stripePriceId,
+    stripeMonthlyPriceId,
+    stripeYearlyPriceId,
   };
 }
 
@@ -66,9 +87,11 @@ export function formToPlanPayload(values: PlanFormValues, id: string) {
   if (values.rewardsPerDay) limits.rewardsPerDay = Number(values.rewardsPerDay);
   if (values.tasksPerDay) limits.tasksPerDay = Number(values.tasksPerDay);
 
+  const monthly = values.monthlyPrice !== '' ? Number(values.monthlyPrice) : null;
+  const yearly = values.yearlyPrice !== '' ? Number(values.yearlyPrice) : null;
   const features: Record<string, any> = {
     backendId: values.backendId.trim() || undefined,
-    billing: values.backendId.includes('yearly') ? 'yearly' : values.backendId.includes('monthly') ? 'monthly' : 'none',
+    billing: monthly && yearly ? 'both' : monthly ? 'monthly' : yearly ? 'yearly' : 'none',
   };
 
   // Add localized features if any exist
@@ -81,7 +104,9 @@ export function formToPlanPayload(values: PlanFormValues, id: string) {
   return {
     id,
     sort: values.sort ? Number(values.sort) : undefined,
-    price: values.price !== '' ? Number(values.price) : null,
+    monthlyPrice: monthly,
+    yearlyPrice: yearly,
+    price: monthly ?? yearly,
     currency: values.currency.trim().toUpperCase() || 'USD',
     limitsVersion: values.limitsVersion ? Number(values.limitsVersion) : undefined,
     limits: Object.keys(limits).length ? limits : undefined,
@@ -128,7 +153,7 @@ export function PlanForm({
       className="space-y-4"
     >
       {error && <Alert message={error} />}
-      <Field label="معرّف الخطة (backendId)" hint="مثل: free أو family_pro_monthly — يُستخدم لتحديد فترة الفوترة في Stripe">
+      <Field label="معرّف الخطة (backendId)" hint="مثل: free أو family_pro. الفترة تُحدد بسعر الشهر وسعر السنة، لا باسم المعرّف">
         <input
           className={inputClass}
           required={isCreate}
@@ -146,31 +171,44 @@ export function PlanForm({
             onChange={(e) => setValues({ ...values, sort: e.target.value })}
           />
         </Field>
-        {!isCreate && (values.stripeProductId || values.stripePriceId) && (
-          <Field label="Stripe" hint="يُنشأ تلقائياً عند الحفظ">
+        {!isCreate && (values.stripeProductId || values.stripeMonthlyPriceId || values.stripeYearlyPriceId) && (
+          <Field label="Stripe" hint="يُحدَّث تلقائياً عند حفظ السعر">
             <div className="space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-600">
               {values.stripeProductId && <p>Product: {values.stripeProductId}</p>}
-              {values.stripePriceId && <p>Price: {values.stripePriceId}</p>}
+              {values.stripeMonthlyPriceId && <p>Monthly: {values.stripeMonthlyPriceId}</p>}
+              {values.stripeYearlyPriceId && <p>Yearly: {values.stripeYearlyPriceId}</p>}
             </div>
           </Field>
         )}
       </div>
-      {isCreate && values.price && Number(values.price) > 0 && values.backendId !== 'free' && (
+      {(Number(values.monthlyPrice) > 0 || Number(values.yearlyPrice) > 0) && values.backendId !== 'free' && (
         <p className="text-sm text-slate-600">
-          سيتم إنشاء منتج وسعر في Stripe تلقائياً عند حفظ الخطة.
+          حفظ الخطة ينشئ أو يحدّث سعر الشهر وسعر السنة في Stripe. الاشتراكات الحالية تنتقل للسعر الجديد دون تغيير تاريخ انتهاء الفترة.
         </p>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="السعر" hint="اتركه فارغًا للخطط المجانية">
+        <Field label="السعر الشهري" hint="فارغ = لا توجد فترة شهرية">
           <input
             type="number"
             min="0"
             step="0.01"
             className={inputClass}
-            value={values.price}
-            onChange={(e) => setValues({ ...values, price: e.target.value })}
+            value={values.monthlyPrice}
+            onChange={(e) => setValues({ ...values, monthlyPrice: e.target.value })}
           />
         </Field>
+        <Field label="السعر السنوي" hint="فارغ = لا توجد فترة سنوية">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className={inputClass}
+            value={values.yearlyPrice}
+            onChange={(e) => setValues({ ...values, yearlyPrice: e.target.value })}
+          />
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label="العملة" hint="مثل: USD, EUR, SAR">
           <input
             className={inputClass}
