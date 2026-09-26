@@ -193,6 +193,8 @@
       <a href="#auth-change-email">Change email</a>
       <a href="#auth-family">Family members & PIN</a>
       <a href="#auth-me">Me & family</a>
+      <div class="sub">Billing</div>
+      <a href="#billing-checkout">Subscribe (month / year)</a>
       <div class="sub">Admin dashboard</div>
       <a href="#admin-login">Admin login</a>
       <a href="#admin-password">Admin password</a>
@@ -475,6 +477,44 @@ POST /auth/family-code/signin
         <pre><span class="label">Related</span><code>GET /auth/family-members</code></pre>
       </article>
 
+      <h2>Billing <span class="badge auth">Parent JWT</span></h2>
+      <p class="desc">Full notes: <code>docs/BILLING-CHECKOUT.md</code>. Prices come from <code>GET /public/subscription-plans</code> (<code>monthlyPrice</code>, <code>yearlyPrice</code>, <code>features.backendId</code>).</p>
+
+      <article class="endpoint" id="billing-checkout">
+        <div class="endpoint-header">
+          <span class="method post">POST</span>
+          <span class="path">/billing/stripe/checkout-session</span>
+          <span class="badge auth">Bearer JWT</span>
+        </div>
+        <p class="desc">
+          Parent chooses <strong>month</strong> or <strong>year</strong>, then the app sends that
+          <code>interval</code> with the plan <code>backendId</code>. Open <code>data.url</code> to pay.
+          The period end is copied from Stripe after payment.
+        </p>
+        <pre><span class="label">Monthly</span><code>Authorization: Bearer &lt;parent-jwt&gt;
+
+{
+  "backendPlanId": "family_pro",
+  "interval": "month",
+  "successUrl": "https://app.neyome.com/billing/success",
+  "cancelUrl": "https://app.neyome.com/billing/cancel"
+}</code></pre>
+        <pre><span class="label">Yearly</span><code>{
+  "backendPlanId": "family_pro",
+  "interval": "year"
+}</code></pre>
+        <pre><span class="label">Response</span><code>{
+  "success": true,
+  "data": {
+    "url": "https://checkout.stripe.com/c/pay/cs_test_123",
+    "sessionId": "cs_test_123"
+  }
+}</code></pre>
+        <pre><span class="label">After payment</span><code>GET /billing/stripe/subscription
+PATCH /billing/stripe/subscription/auto-renew
+{ "autoRenew": true }</code></pre>
+      </article>
+
       <h2 style="color:var(--admin)">Admin dashboard <span class="badge admin">Admin JWT</span></h2>
       <div class="note admin">
         Admin routes are grouped separately in Swagger under <strong>Admin Dashboard</strong>.
@@ -549,7 +589,7 @@ GET                    /admin/links</code></pre>
       </div>
 
       <p class="desc" style="margin-top:2rem">
-        See also: <code>docs/FAMILY-CHILD-PIN.md</code>, <code>docs/AUTH-GOOGLE.md</code>, <code>docs/AUTH-EMAIL-CHANGE.md</code>,
+        See also: <code>docs/BILLING-CHECKOUT.md</code>, <code>docs/FAMILY-CHILD-PIN.md</code>, <code>docs/AUTH-GOOGLE.md</code>, <code>docs/AUTH-EMAIL-CHANGE.md</code>,
         <code>docs/API-PUBLIC.md</code>, <code>docs/ADMIN.md</code>, <code>docs/SEEDING.md</code>
       </p>
     </main>

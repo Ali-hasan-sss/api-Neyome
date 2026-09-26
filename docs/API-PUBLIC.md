@@ -70,6 +70,8 @@ X-Locale: ar
 
 Paginated list of all available subscription plans with pricing and features.
 
+Paid plans expose **`monthlyPrice`** and **`yearlyPrice`**. The app sends the chosen period when starting checkout: [BILLING-CHECKOUT.md](./BILLING-CHECKOUT.md) (`POST /billing/stripe/checkout-session` with `interval`: `month` or `year`).
+
 **Query:** `page` (default 1), `limit` (default 50)
 
 **Example**
