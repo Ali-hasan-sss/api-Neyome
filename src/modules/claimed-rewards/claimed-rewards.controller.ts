@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ClaimedRewardQueryDto } from './dto/claimed-reward-query.dto';
 import { CreateClaimedRewardDto } from './dto/create-claimed-reward.dto';
 import { UpdateClaimedRewardDto } from './dto/update-claimed-reward.dto';
 import { ClaimedRewardsService } from './claimed-rewards.service';
@@ -15,7 +15,14 @@ export class ClaimedRewardsController {
   constructor(private readonly service: ClaimedRewardsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List claimed rewards',
+    description:
+      'Children receive their own claims. Parents receive claims for the whole family, including pending child requests. `status=pending` means not yet approved.',
+  })
   @ApiPaginationQueries()
+  @ApiQuery({ name: 'familyId', required: false, description: 'Must match the caller family. Parents already see that family.' })
+  @ApiQuery({ name: 'status', required: false, enum: ['pending', 'approved', 'rejected'] })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedPaginatedResponse(CreateClaimedRewardDto, {
     items: [
@@ -26,8 +33,8 @@ export class ClaimedRewardsController {
     limit: 20,
   })
   @ApiErrorResponses()
-  findAll(@Request() req: any, @Query() query: PaginationQueryDto) {
-    return this.service.findAllForUser(req.user.sub, query).then((data) => ({ success: true, data, message: 'Claimed rewards fetched' }));
+  findAll(@Request() req: any, @Query() query: ClaimedRewardQueryDto) {
+    return this.service.findAllForCaller(req.user, query).then((data) => ({ success: true, data, message: 'Claimed rewards fetched' }));
   }
 
   @Get(':id')
@@ -40,7 +47,7 @@ export class ClaimedRewardsController {
   })
   @ApiErrorResponses()
   findOne(@Request() req: any, @Param('id') id: string) {
-    return this.service.findOneForUser(id, req.user.sub).then((data) => ({ success: true, data, message: 'Claimed reward fetched' }));
+    return this.service.findOneForCaller(id, req.user).then((data) => ({ success: true, data, message: 'Claimed reward fetched' }));
   }
 
   @Post()
@@ -63,9 +70,9 @@ export class ClaimedRewardsController {
 
   @Patch(':id')
   @ApiOperation({
-    summary: 'Update claimed reward (replace cost)',
+    summary: 'Approve, reject, or update a claimed reward',
     description:
-      'Same obligation math as `PATCH /rewards/:id`: committed rows use `pointsUsed`; increasing cost while committed debits the difference; decreasing refunds; removing commitment refunds full prior amount. Reasons `claimed_reward_obligation` / `claimed_reward_delete_refund` on delete.',
+      'Parents can update a claim that belongs to their family (`approved: true` or `status: approved` to approve, `approved: false` or `status: rejected` to reject). Rejection refunds points that were already taken. Children can update only their own claim.',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateClaimedRewardDto, {
@@ -74,7 +81,7 @@ export class ClaimedRewardsController {
   })
   @ApiErrorResponses()
   update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateClaimedRewardDto) {
-    return this.service.updateForUser(id, req.user.sub, dto).then((data) => ({ success: true, data, message: 'Claimed reward updated' }));
+    return this.service.updateForCaller(id, req.user, dto).then((data) => ({ success: true, data, message: 'Claimed reward updated' }));
   }
 
   @Delete(':id')

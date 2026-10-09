@@ -18,6 +18,10 @@ export class ClaimedReward {
   @Column({ type: 'boolean', nullable: true })
   approved?: boolean;
 
+  /** pending | approved | rejected. Null on older rows means pending unless approved is true. */
+  @Column({ type: 'text', nullable: true })
+  status?: string | null;
+
   @Column({ type: 'boolean', nullable: true })
   earned?: boolean;
 

@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateClaimedRewardDto {
   @IsUUID()
@@ -19,6 +19,10 @@ export class CreateClaimedRewardDto {
   @IsOptional()
   @IsBoolean()
   approved?: boolean;
+
+  @IsOptional()
+  @IsIn(['pending', 'approved', 'rejected'])
+  status?: 'pending' | 'approved' | 'rejected';
 
   @IsOptional()
   @IsBoolean()
