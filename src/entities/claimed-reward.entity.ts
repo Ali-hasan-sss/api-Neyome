@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, ManyToOne, JoinColumn, DeleteDateColumn, Index } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity({ name: 'claimed_rewards' })
@@ -30,6 +30,11 @@ export class ClaimedReward {
 
   @Column({ type: 'uuid', nullable: true })
   userId?: string;
+
+  /** Family of the requesting child, copied at claim time so parents can list/approve per family. */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  familyId?: string | null;
 
   @ManyToOne(() => User, (user) => user.claimedRewards, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'userId' })

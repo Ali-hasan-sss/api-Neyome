@@ -6,6 +6,7 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { StreaksService } from '../streaks/streaks.service';
+import { BadgeAwardsService } from '../badges/badge-awards.service';
 
 @Injectable()
 export class TasksService {
@@ -13,6 +14,7 @@ export class TasksService {
     @InjectRepository(Task)
     private readonly repo: Repository<Task>,
     private readonly streaksService: StreaksService,
+    private readonly badgeAwards: BadgeAwardsService,
   ) {}
 
   private isTaskCompleted(task: Pick<Task, 'completed' | 'status'>): boolean {
@@ -73,6 +75,7 @@ export class TasksService {
         dueAt: saved.dueAt,
         tz: saved.tz,
       });
+      await this.badgeAwards.evaluateUserSafely(saved.assigneeId);
     }
 
     return saved;
@@ -110,6 +113,7 @@ export class TasksService {
         dueAt: saved.dueAt,
         tz: saved.tz,
       });
+      await this.badgeAwards.evaluateUserSafely(saved.assigneeId);
     }
 
     return saved;

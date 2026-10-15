@@ -26,6 +26,16 @@ export class CreateTaskDto {
   @IsInt()
   points?: number;
 
+  @ApiPropertyOptional({ description: 'Task type / category id (from /task-types).', example: '3c1d...' })
+  @IsOptional()
+  @IsString()
+  taskType?: string;
+
+  @ApiPropertyOptional({ description: 'Task type key. Badges whose `trigger` equals this key count these tasks.', example: 'homework' })
+  @IsOptional()
+  @IsString()
+  taskTypeKey?: string;
+
   @ApiPropertyOptional({ example: 'Asia/Riyadh' })
   @IsOptional()
   @IsString()

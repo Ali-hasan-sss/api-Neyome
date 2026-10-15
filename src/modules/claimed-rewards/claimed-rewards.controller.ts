@@ -52,27 +52,29 @@ export class ClaimedRewardsController {
 
   @Post()
   @ApiOperation({
-    summary: 'Create claimed-reward row',
+    summary: 'Request (claim) a reward',
     description:
-      'If the row is already **committed** (`claimedAt`, `earned`, or `approved`), debits `pointsUsed` from the user. Ledger prefix `claimed_reward_obligation`.',
+      'Stores the requester `userId` and their `familyId` on the row. Requests from children are always created as `status: "pending"` so a parent can approve them. `rewardId` may be a family catalog id (`/reward-lists`, also returned by `GET /rewards`); when `rewardName`/`pointsUsed` are omitted they are taken from that reward. If the row is already **committed** (`claimedAt`, `earned`, or `approved`), debits `pointsUsed` from the user. Ledger prefix `claimed_reward_obligation`.',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiCreatedWrappedResponse(CreateClaimedRewardDto, {
     id: 'cr111111-2222-3333-4444-555555555555',
     rewardId: 'r...',
     userId: 'u...',
+    familyId: 'f...',
+    status: 'pending',
     pointsUsed: 50,
   })
   @ApiErrorResponses()
   create(@Request() req: any, @Body() dto: CreateClaimedRewardDto) {
-    return this.service.create({ ...dto, userId: req.user.sub }).then((data) => ({ success: true, data, message: 'Claimed reward created' }));
+    return this.service.createForCaller(req.user, dto).then((data) => ({ success: true, data, message: 'Claimed reward created' }));
   }
 
   @Patch(':id')
   @ApiOperation({
     summary: 'Approve, reject, or update a claimed reward',
     description:
-      'Parents can update a claim that belongs to their family (`approved: true` or `status: approved` to approve, `approved: false` or `status: rejected` to reject). Rejection refunds points that were already taken. Children can update only their own claim.',
+      'Parents can update any claim in their family (`approved: true` or `status: approved` to approve, `approved: false` or `status: rejected` to reject). Rejection refunds points that were already taken. Children can update only their own claim and may only cancel it while it is pending (`status: rejected`); approving returns **403**.',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateClaimedRewardDto, {

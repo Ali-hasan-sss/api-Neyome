@@ -15,22 +15,29 @@ export class RewardsController {
   constructor(private readonly rewardsService: RewardsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List rewards visible to the caller',
+    description:
+      'Returns the family reward catalog that parents manage in `/reward-lists` (`source: "family"`, `userId: null`) followed by the caller\'s own reward rows (`source: "personal"`). Children use this list to pick a reward and redeem it through `POST /claimed-rewards` with `rewardId` = the item `id`.',
+  })
   @ApiPaginationQueries()
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedPaginatedResponse(CreateRewardDto, {
     items: [
-      { id: 'r1111111-2222-3333-4444-555555555555', name: 'Bike', points: 100, userId: 'u1111111-2222-3333-4444-555555555555' },
+      { id: 'l1111111-2222-3333-4444-555555555555', name: 'Weekend trip', icon: '🎡', points: 20, familyId: 'f1111111-2222-3333-4444-555555555555', userId: null, source: 'family' },
+      { id: 'r1111111-2222-3333-4444-555555555555', name: 'Bike', points: 100, userId: 'u1111111-2222-3333-4444-555555555555', source: 'personal' },
     ],
-    total: 1,
+    total: 2,
     page: 1,
     limit: 20,
   })
   @ApiErrorResponses()
   findAll(@Request() req: any, @Query() query: PaginationQueryDto) {
-    return this.rewardsService.findAllForUser(req.user.sub, query).then((data) => ({ success: true, data, message: 'Rewards fetched' }));
+    return this.rewardsService.findAllVisibleForUser(req.user.sub, query).then((data) => ({ success: true, data, message: 'Rewards fetched' }));
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a reward', description: 'Looks up the caller\'s own rewards first, then the family catalog (`/reward-lists`).' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedResponse(CreateRewardDto, {
     id: 'r1111111-2222-3333-4444-555555555555',
@@ -40,7 +47,7 @@ export class RewardsController {
   })
   @ApiErrorResponses()
   findOne(@Request() req: any, @Param('id') id: string) {
-    return this.rewardsService.findOneForUser(id, req.user.sub).then((data) => ({ success: true, data, message: 'Reward fetched' }));
+    return this.rewardsService.findOneVisibleForUser(id, req.user.sub).then((data) => ({ success: true, data, message: 'Reward fetched' }));
   }
 
   @Post()

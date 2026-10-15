@@ -1,22 +1,67 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
+const PLACEHOLDER_SMTP_HOSTS = ['smtp.example.com', 'example.com', 'localhost.example'];
+const EMAIL_UNAVAILABLE_MESSAGE = 'Email service is temporarily unavailable. Please try again later.';
+
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter;
+  private readonly host?: string;
 
   constructor(private readonly configService: ConfigService) {
+    this.host = this.configService.get<string>('SMTP_HOST')?.trim() || undefined;
+    const port = Number(this.configService.get<string>('SMTP_PORT')) || 587;
+    // Env values are strings: "false" must not turn TLS on.
+    const secureRaw = String(this.configService.get<string>('SMTP_SECURE') ?? '').trim().toLowerCase();
+    const secure = secureRaw ? secureRaw === 'true' || secureRaw === '1' : port === 465;
+    const user = this.configService.get<string>('SMTP_USER')?.trim();
+    const pass = this.configService.get<string>('SMTP_PASS');
+
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('SMTP_HOST'),
-      port: this.configService.get<number>('SMTP_PORT') || 587,
-      secure: this.configService.get<boolean>('SMTP_SECURE') || false,
-      auth: {
-        user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASS'),
-      },
+      host: this.host,
+      port,
+      secure,
+      auth: user ? { user, pass } : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
+  }
+
+  private get isConfigured(): boolean {
+    return !!this.host && !PLACEHOLDER_SMTP_HOSTS.includes(this.host.toLowerCase());
+  }
+
+  onModuleInit() {
+    if (!this.isConfigured) {
+      this.logger.warn(
+        `SMTP is not configured (SMTP_HOST=${this.host ?? '<empty>'}). Password reset and email change will fail until real SMTP settings are provided.`,
+      );
+      return;
+    }
+    this.transporter
+      .verify()
+      .then(() => this.logger.log(`SMTP connection to ${this.host} verified`))
+      .catch((err) => this.logger.warn(`SMTP verification failed for ${this.host}: ${err?.message ?? err}`));
+  }
+
+  /** Logs the real cause; callers only ever see a generic 503. */
+  private async send(mailOptions: nodemailer.SendMailOptions, purpose: string): Promise<void> {
+    if (!this.isConfigured) {
+      this.logger.error(`Cannot send ${purpose} to ${mailOptions.to}: SMTP is not configured`);
+      throw new ServiceUnavailableException(EMAIL_UNAVAILABLE_MESSAGE);
+    }
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`${purpose} sent to ${mailOptions.to}`);
+    } catch (error) {
+      const err = error as Error & { code?: string };
+      this.logger.error(`Failed to send ${purpose} to ${mailOptions.to}: ${err.code ?? ''} ${err.message}`, err.stack);
+      throw new ServiceUnavailableException(EMAIL_UNAVAILABLE_MESSAGE);
+    }
   }
 
   async sendPasswordResetOtp(email: string, otp: string, userName?: string): Promise<void> {
@@ -44,13 +89,7 @@ export class MailService {
       text: `Your password reset OTP is: ${otp}. This OTP is valid for 10 minutes.`,
     };
 
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Password reset OTP sent to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send password reset OTP to ${email}`, error);
-      throw error;
-    }
+    await this.send(mailOptions, 'Password reset OTP');
   }
 
   async sendEmailChangeOtp(email: string, otp: string, userName?: string): Promise<void> {
@@ -76,12 +115,6 @@ export class MailService {
       text: `Your email verification code is: ${otp}. Valid for 10 minutes.`,
     };
 
-    try {
-      await this.transporter.sendMail(mailOptions);
-      this.logger.log(`Email change OTP sent to ${email}`);
-    } catch (error) {
-      this.logger.error(`Failed to send email change OTP to ${email}`, error);
-      throw error;
-    }
+    await this.send(mailOptions, 'Email change OTP');
   }
 }

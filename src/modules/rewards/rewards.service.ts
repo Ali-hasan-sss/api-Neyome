@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { Reward } from '../../entities/reward.entity';
+import { RewardList } from '../../entities/reward-list.entity';
 import { User } from '../../entities/user.entity';
 import { PointLedger } from '../../entities/point-ledger.entity';
 import { Family } from '../../entities/family.entity';
@@ -16,6 +17,8 @@ export class RewardsService {
   constructor(
     @InjectRepository(Reward)
     private readonly repo: Repository<Reward>,
+    @InjectRepository(RewardList)
+    private readonly rewardListRepo: Repository<RewardList>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(Family)
@@ -109,6 +112,71 @@ export class RewardsService {
       withDeleted: false,
     });
     return { items, total, page, limit };
+  }
+
+  /**
+   * What a family member can see: the family catalog created by parents in `/reward-lists`
+   * (`source: 'family'`) plus the caller's own reward rows (`source: 'personal'`).
+   */
+  async findAllVisibleForUser(userId: string, query: PaginationQueryDto) {
+    const { page = 1, limit = 20, sortBy, sortOrder } = query;
+    const familyId = await this.familyIdOf(userId);
+
+    const [catalog, personal] = await Promise.all([
+      familyId ? this.rewardListRepo.find({ where: { familyId }, order: { createdAt: 'ASC' } }) : Promise.resolve([]),
+      this.repo.find({ where: { userId }, order: { createdAt: 'ASC' } }),
+    ]);
+
+    const all: Record<string, unknown>[] = [
+      ...catalog.map((item) => this.presentCatalogItem(item)),
+      ...personal.map((r) => ({ ...r, source: 'personal' })),
+    ];
+
+    if (sortBy) {
+      const dir = sortOrder === 'DESC' ? -1 : 1;
+      all.sort((a, b) => {
+        const av = a[sortBy] as any;
+        const bv = b[sortBy] as any;
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return av > bv ? dir : av < bv ? -dir : 0;
+      });
+    }
+
+    const items = all.slice((page - 1) * limit, page * limit);
+    return { items, total: all.length, page, limit };
+  }
+
+  async findOneVisibleForUser(id: string, userId: string) {
+    const own = await this.repo.findOne({ where: { id, userId } });
+    if (own) return { ...own, source: 'personal' };
+
+    const familyId = await this.familyIdOf(userId);
+    if (familyId) {
+      const item = await this.rewardListRepo.findOne({ where: { id, familyId } });
+      if (item) return this.presentCatalogItem(item);
+    }
+    throw new NotFoundException('Reward not found');
+  }
+
+  private presentCatalogItem(item: RewardList) {
+    return {
+      id: item.id,
+      name: item.name,
+      icon: item.icon,
+      points: item.points,
+      createdAt: item.createdAt,
+      familyId: item.familyId,
+      userId: null,
+      source: 'family',
+    };
+  }
+
+  private async familyIdOf(userId: string): Promise<string | undefined> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return user.familyId ?? undefined;
   }
 
   async findOne(id: string) {

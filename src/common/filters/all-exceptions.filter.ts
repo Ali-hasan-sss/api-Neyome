@@ -10,6 +10,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
+    let logMessage: string | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -23,11 +24,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = exception.message;
       }
     } else if (exception && typeof exception === 'object') {
-      message = (exception as any).message || message;
+      const err = exception as any;
+      const errStatus = Number(err.status ?? err.statusCode);
+      // http-errors (e.g. malformed JSON body) mark client-safe 4xx errors with `expose: true`.
+      if (err.expose === true && errStatus >= 400 && errStatus < 500) {
+        status = errStatus;
+        message = err.message || message;
+      } else {
+        // Internal details (DB, DNS, SMTP, ...) stay in the server log only.
+        logMessage = err.message;
+      }
     }
 
     // Log full exception for diagnostics
-    this.logger.error(message, (exception as any)?.stack || undefined);
+    this.logger.error(logMessage ?? message, (exception as any)?.stack || undefined);
 
     response.status(status).json({ success: false, data: null, message });
   }

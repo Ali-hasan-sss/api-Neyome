@@ -7,6 +7,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UploadsService } from '../uploads/uploads.service';
+import { BadgeAwardsService } from '../badges/badge-awards.service';
 
 @Injectable()
 export class UsersService {
@@ -14,7 +15,14 @@ export class UsersService {
     @InjectRepository(User)
     private readonly repo: Repository<User>,
     private readonly uploadsService: UploadsService,
+    private readonly badgeAwards: BadgeAwardsService,
   ) {}
+
+  private async withBadgesAwarded(user: User): Promise<User> {
+    const evaluation = await this.badgeAwards.evaluateUserSafely(user.id);
+    if (evaluation?.awarded.length) user.badges = evaluation.badges;
+    return user;
+  }
 
   async findAll(
     query: PaginationQueryDto & { name?: string; email?: string; search?: string },
@@ -83,7 +91,8 @@ export class UsersService {
     const existing = await this.findOne(id);
     Object.assign(existing, dto);
     existing.updatedAt = new Date();
-    return await this.repo.save(existing);
+    const saved = await this.repo.save(existing);
+    return dto.points !== undefined ? this.withBadgesAwarded(saved) : saved;
   }
 
   async updateMe(id: string, dto: UpdateMeDto, file?: Express.Multer.File) {
@@ -109,7 +118,8 @@ export class UsersService {
   async updateForFamily(id: string, familyId: string, dto: UpdateUserDto) {
     const existing = await this.findOneForFamily(id, familyId);
     Object.assign(existing, dto);
-    return await this.repo.save(existing);
+    const saved = await this.repo.save(existing);
+    return dto.points !== undefined ? this.withBadgesAwarded(saved) : saved;
   }
 
   async remove(id: string) {

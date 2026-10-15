@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
 import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ParentGuard } from '../../auth/parent.guard';
@@ -7,13 +7,17 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateBadgeDto } from './dto/create-badge.dto';
 import { UpdateBadgeDto } from './dto/update-badge.dto';
 import { BadgesService } from './badges.service';
+import { BadgeAwardsService } from './badge-awards.service';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @ApiTags('Badges')
 @Controller('badges')
 export class BadgesController {
-  constructor(private readonly service: BadgesService) {}
+  constructor(
+    private readonly service: BadgesService,
+    private readonly awards: BadgeAwardsService,
+  ) {}
 
   @Get()
   @ApiPaginationQueries()
@@ -44,8 +48,29 @@ export class BadgesController {
     return this.service.findOneForFamily(id, req.user.familyId).then((data) => ({ success: true, data, message: 'Badge fetched' }));
   }
 
+  @Post('evaluate')
+  @UseGuards(ParentGuard)
+  @ApiOperation({
+    summary: 'Re-check badges for every child in the family',
+    description:
+      'Badges are awarded automatically (points change, task completion, badge create/update). This forces a re-check and returns newly awarded badge ids per child id.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Parents only' })
+  @ApiErrorResponses()
+  evaluate(@Request() req: any) {
+    return this.awards
+      .evaluateFamily(req.user.familyId)
+      .then((data) => ({ success: true, data, message: 'Badges evaluated' }));
+  }
+
   @Post()
   @UseGuards(ParentGuard)
+  @ApiOperation({
+    summary: 'Create badge',
+    description:
+      'A child earns the badge once `threshold` is reached for `trigger`: empty or `points` = points balance; `any_task` = completed tasks; `streak` = best daily streak; any other value = completed tasks whose task type key matches the trigger (`category_` prefix optional). Earned badges appear on the child as `badges: { "<badgeId>": true }`. Existing children are checked immediately.',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'Parents only' })
   @ApiCreatedWrappedResponse(CreateBadgeDto, {
@@ -56,7 +81,12 @@ export class BadgesController {
   })
   @ApiErrorResponses()
   create(@Request() req: any, @Body() dto: CreateBadgeDto) {
-    return this.service.create({ ...dto, familyId: req.user.familyId }).then((data) => ({ success: true, data, message: 'Badge created' }));
+    return this.service
+      .create({ ...dto, familyId: req.user.familyId })
+      .then(async (data) => {
+        await this.awards.evaluateFamilySafely(req.user.familyId);
+        return { success: true, data, message: 'Badge created' };
+      });
   }
 
   @Patch(':id')
@@ -69,7 +99,12 @@ export class BadgesController {
   })
   @ApiErrorResponses()
   update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateBadgeDto) {
-    return this.service.updateForFamily(id, req.user.familyId, dto).then((data) => ({ success: true, data, message: 'Badge updated' }));
+    return this.service
+      .updateForFamily(id, req.user.familyId, dto)
+      .then(async (data) => {
+        await this.awards.evaluateFamilySafely(req.user.familyId);
+        return { success: true, data, message: 'Badge updated' };
+      });
   }
 
   @Delete(':id')

@@ -1,10 +1,12 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { ClaimedReward } from '../../entities/claimed-reward.entity';
 import { User } from '../../entities/user.entity';
 import { PointLedger } from '../../entities/point-ledger.entity';
+import { Reward } from '../../entities/reward.entity';
+import { RewardList } from '../../entities/reward-list.entity';
 import { JwtPayload } from '../../auth/auth.service';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { ClaimedRewardQueryDto } from './dto/claimed-reward-query.dto';
@@ -12,13 +14,36 @@ import { CreateClaimedRewardDto } from './dto/create-claimed-reward.dto';
 import { UpdateClaimedRewardDto } from './dto/update-claimed-reward.dto';
 
 @Injectable()
-export class ClaimedRewardsService {
+export class ClaimedRewardsService implements OnModuleInit {
+  private readonly logger = new Logger(ClaimedRewardsService.name);
+
   constructor(
     @InjectRepository(ClaimedReward)
     private readonly repo: Repository<ClaimedReward>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Reward)
+    private readonly rewardRepo: Repository<Reward>,
+    @InjectRepository(RewardList)
+    private readonly rewardListRepo: Repository<RewardList>,
   ) {}
+
+  /** Older rows were saved without familyId/status; fill them so family-level queries see them. */
+  async onModuleInit() {
+    try {
+      await this.repo.query(
+        `UPDATE claimed_rewards cr SET "familyId" = u."familyId"
+         FROM users u
+         WHERE cr."userId" = u.id AND cr."familyId" IS NULL AND u."familyId" IS NOT NULL`,
+      );
+      await this.repo.query(
+        `UPDATE claimed_rewards SET status = CASE WHEN approved = true THEN 'approved' ELSE 'pending' END
+         WHERE status IS NULL OR status = ''`,
+      );
+    } catch (err) {
+      this.logger.warn(`Claimed rewards backfill skipped: ${(err as Error).message}`);
+    }
+  }
 
   /** Claim / redemption is active for obligation accounting. A rejection refunds the child. */
   private isCommitted(cr: Pick<ClaimedReward, 'claimedAt' | 'earned' | 'approved' | 'status'>): boolean {
@@ -127,7 +152,9 @@ export class ClaimedRewardsService {
       .where('cr.deletedAt IS NULL');
 
     if (context.isParent && context.familyId) {
-      qb.andWhere('owner.familyId = :familyId', { familyId: context.familyId });
+      qb.andWhere('(cr.familyId = :familyId OR (cr.familyId IS NULL AND owner.familyId = :familyId))', {
+        familyId: context.familyId,
+      });
     } else {
       qb.andWhere('cr.userId = :userId', { userId: context.sub });
     }
@@ -157,12 +184,46 @@ export class ClaimedRewardsService {
     return this.present(entity);
   }
 
-  async create(dto: CreateClaimedRewardDto) {
+  /**
+   * Children always create `pending` requests; only parents may create an already-approved row.
+   * familyId comes from the requester's user row, never from the client.
+   */
+  async createForCaller(caller: JwtPayload, dto: CreateClaimedRewardDto) {
+    const context = await this.callerContext(caller);
+    const input: CreateClaimedRewardDto = { ...dto, userId: context.sub };
+    if (!context.isParent) {
+      input.status = 'pending';
+      input.approved = false;
+    }
+    await this.fillFromReward(input, context.familyId);
+    return this.create(input, context.familyId);
+  }
+
+  /** Fills missing name/cost from the claimed reward (family catalog or the child's own reward). */
+  private async fillFromReward(dto: CreateClaimedRewardDto, familyId?: string) {
+    if (!dto.rewardId || (dto.rewardName != null && dto.pointsUsed != null)) return;
+
+    const source =
+      (familyId ? await this.rewardListRepo.findOne({ where: { id: dto.rewardId, familyId } }) : null) ??
+      (await this.rewardRepo.findOne({ where: { id: dto.rewardId, userId: dto.userId } }));
+    if (!source) return;
+
+    if (dto.rewardName == null && source.name != null) dto.rewardName = source.name;
+    if (dto.pointsUsed == null && source.points != null) dto.pointsUsed = source.points;
+  }
+
+  async create(dto: CreateClaimedRewardDto, familyId?: string) {
+    if (familyId === undefined && dto.userId) {
+      const owner = await this.userRepo.findOne({ where: { id: dto.userId } });
+      familyId = owner?.familyId ?? undefined;
+    }
+
     return this.repo.manager.transaction(async (em) => {
       const rewardRepo = em.getRepository(ClaimedReward);
       const status = dto.status ?? (dto.approved === true ? 'approved' : 'pending');
       const entity = rewardRepo.create({
         ...dto,
+        familyId: familyId ?? null,
         status,
         approved: dto.approved ?? status === 'approved',
         claimedAt: dto.claimedAt ? new Date(dto.claimedAt) : undefined,
@@ -195,8 +256,23 @@ export class ClaimedRewardsService {
   }
 
   async updateForCaller(id: string, caller: JwtPayload, dto: UpdateClaimedRewardDto) {
-    const existing = await this.findVisible(id, caller);
+    const context = await this.callerContext(caller);
+    const existing = await this.findVisible(id, caller, context);
+    if (!context.isParent) this.assertChildDecision(existing, dto);
     return this.applyUpdate(existing, dto);
+  }
+
+  /** A child may only cancel (reject) their own pending request; approving is the parent's call. */
+  private assertChildDecision(existing: ClaimedReward, dto: UpdateClaimedRewardDto) {
+    const touchesDecision = dto.approved !== undefined || dto.status !== undefined;
+    if (!touchesDecision) return;
+
+    const current = existing.status || (existing.approved === true ? 'approved' : 'pending');
+    const next = dto.status ?? (dto.approved === true ? 'approved' : dto.approved === false ? 'rejected' : current);
+    if (next === current) return;
+    if (current === 'pending' && next === 'rejected') return;
+
+    throw new ForbiddenException('Only a parent can approve or reject reward requests');
   }
 
   private async applyUpdate(existing: ClaimedReward, dto: UpdateClaimedRewardDto) {
@@ -282,12 +358,17 @@ export class ClaimedRewardsService {
     return cr;
   }
 
-  private async findVisible(id: string, caller: JwtPayload): Promise<ClaimedReward> {
-    const context = await this.callerContext(caller);
+  private async findVisible(
+    id: string,
+    caller: JwtPayload,
+    context?: { sub: string; isParent: boolean; familyId?: string },
+  ): Promise<ClaimedReward> {
+    context ??= await this.callerContext(caller);
     const entity = await this.repo.findOne({ where: { id }, relations: { user: true } });
     if (!entity) throw new NotFoundException('ClaimedReward not found');
     if (entity.userId === context.sub) return entity;
-    if (context.isParent && context.familyId && entity.user?.familyId === context.familyId) return entity;
+    const entityFamilyId = entity.familyId ?? entity.user?.familyId;
+    if (context.isParent && context.familyId && entityFamilyId === context.familyId) return entity;
     throw new NotFoundException('ClaimedReward not found');
   }
 }
