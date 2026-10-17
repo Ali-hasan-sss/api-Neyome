@@ -27,4 +27,9 @@ export class CreateBadgeDto {
   @IsOptional()
   @IsString()
   trigger?: string;
+
+  /** Task-type id the badge counts (same value as `tasks.taskType` / client `taskTypeId`). */
+  @IsOptional()
+  @IsString()
+  taskTypeId?: string;
 }

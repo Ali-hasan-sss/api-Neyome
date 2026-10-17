@@ -20,7 +20,21 @@ export class TasksService {
   private isTaskCompleted(task: Pick<Task, 'completed' | 'status'>): boolean {
     if (task.completed === true) return true;
     const s = task.status?.trim().toLowerCase();
-    return s === 'completed' || s === 'done';
+    return s === 'completed' || s === 'done' || s === 'approved';
+  }
+
+  private isTaskApproved(task: Pick<Task, 'status'>): boolean {
+    return task.status?.trim().toLowerCase() === 'approved';
+  }
+
+  /** Map client `taskTypeId` onto `taskType` and drop the alias before persist. */
+  private normalizeTaskInput(dto: CreateTaskDto | UpdateTaskDto): Partial<Task> {
+    const { taskTypeId, ...rest } = dto as CreateTaskDto & { taskTypeId?: string };
+    const patch = { ...rest } as Partial<Task>;
+    if (taskTypeId != null && (patch.taskType == null || patch.taskType === '')) {
+      patch.taskType = taskTypeId;
+    }
+    return patch;
   }
 
   async findAll(query: PaginationQueryDto & { title?: string; status?: string; assigneeId?: string; familyId?: string }) {
@@ -57,8 +71,9 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto) {
+    const fields = this.normalizeTaskInput(dto);
     const entity = this.repo.create({
-      ...dto,
+      ...fields,
       date: dto.date ? new Date(dto.date) : undefined,
       dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
     } as Task);
@@ -75,6 +90,8 @@ export class TasksService {
         dueAt: saved.dueAt,
         tz: saved.tz,
       });
+    }
+    if (this.isTaskApproved(saved) && saved.assigneeId) {
       await this.badgeAwards.evaluateUserSafely(saved.assigneeId);
     }
 
@@ -83,8 +100,9 @@ export class TasksService {
 
   async update(id: string, dto: UpdateTaskDto) {
     const existing = await this.findOne(id);
+    const fields = this.normalizeTaskInput(dto);
     Object.assign(existing, {
-      ...dto,
+      ...fields,
       date: (dto as any).date ? new Date((dto as any).date) : existing.date,
       dueAt: (dto as any).dueAt ? new Date((dto as any).dueAt) : existing.dueAt,
     });
@@ -94,9 +112,11 @@ export class TasksService {
   async updateForFamily(id: string, familyId: string, dto: UpdateTaskDto) {
     const existing = await this.findOneForFamily(id, familyId);
     const wasCompleted = this.isTaskCompleted(existing);
+    const wasApproved = this.isTaskApproved(existing);
+    const fields = this.normalizeTaskInput(dto);
 
     Object.assign(existing, {
-      ...dto,
+      ...fields,
       date: (dto as any).date ? new Date((dto as any).date) : existing.date,
       dueAt: (dto as any).dueAt ? new Date((dto as any).dueAt) : existing.dueAt,
     });
@@ -113,6 +133,8 @@ export class TasksService {
         dueAt: saved.dueAt,
         tz: saved.tz,
       });
+    }
+    if (!wasApproved && this.isTaskApproved(saved) && saved.assigneeId) {
       await this.badgeAwards.evaluateUserSafely(saved.assigneeId);
     }
 

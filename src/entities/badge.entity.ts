@@ -29,6 +29,10 @@ export class Badge {
   @Column({ type: 'text', nullable: true })
   trigger?: string;
 
+  /** Task type this badge tracks (`tasks.taskType` / client `taskTypeId`). */
+  @Column({ type: 'text', nullable: true })
+  taskTypeId?: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   createdAt?: Date;
 

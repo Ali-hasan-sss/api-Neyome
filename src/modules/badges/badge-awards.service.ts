@@ -19,22 +19,23 @@ type BadgeMap = Record<string, boolean>;
 
 interface UserMetrics {
   points: number;
-  completedTaskKeys: string[][];
+  approvedByTaskTypeId: Record<string, number>;
+  approvedTaskKeys: string[][];
   streak: number;
 }
 
 export interface BadgeEvaluation {
   awarded: string[];
+  revoked: string[];
   badges: BadgeMap;
 }
 
 /**
- * Grants family badges to children. A badge is earned once `threshold` is reached for its `trigger`:
- * - empty / `points`: current points balance
- * - `any_task`: completed tasks assigned to the child
- * - `streak`: best daily streak
- * - anything else: completed tasks whose task type key matches the trigger (or the badge id)
- * Earned badges are stored on `users.badges` as `{ [badgeId]: true }` and never revoked.
+ * Grants family badges to children.
+ * Primary rule: when `taskTypeId` is set, award once the child has `threshold` **approved**
+ * tasks of that type (`tasks.status = approved` and `tasks.taskType = taskTypeId`).
+ * Legacy `trigger` strings still work for older rows that never stored `taskTypeId`.
+ * Empty trigger + no taskTypeId does **not** award on points.
  */
 @Injectable()
 export class BadgeAwardsService implements OnApplicationBootstrap {
@@ -94,32 +95,59 @@ export class BadgeAwardsService implements OnApplicationBootstrap {
   async evaluateUser(userId: string): Promise<BadgeEvaluation> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     const current = this.toBadgeMap(user?.badges);
-    if (!user || user.isParent === true || !user.familyId) return { awarded: [], badges: current };
+    if (!user || user.isParent === true || !user.familyId) {
+      return { awarded: [], revoked: [], badges: current };
+    }
 
     const badges = await this.badgeRepo.find({ where: [{ familyId: user.familyId }, { familyId: IsNull() }] });
-    const candidates = badges.filter((b) => current[b.id] !== true && (b.threshold ?? 0) > 0);
-    if (candidates.length === 0) return { awarded: [], badges: current };
+    if (badges.length === 0) return { awarded: [], revoked: [], badges: current };
 
     const metrics = await this.loadMetrics(user);
-    const awarded = candidates.filter((b) => this.isEarned(b, metrics)).map((b) => b.id);
-    if (awarded.length === 0) return { awarded, badges: current };
+    const next: BadgeMap = { ...current };
+    const awarded: string[] = [];
+    const revoked: string[] = [];
 
-    for (const id of awarded) current[id] = true;
-    await this.userRepo.update(user.id, { badges: current as any, updatedAt: new Date() });
-    this.logger.log(`Awarded badges [${awarded.join(', ')}] to user ${user.id}`);
-    return { awarded, badges: current };
+    for (const badge of badges) {
+      if ((badge.threshold ?? 0) <= 0) continue;
+      const earned = this.isEarned(badge, metrics);
+      const had = next[badge.id] === true;
+      if (earned && !had) {
+        next[badge.id] = true;
+        awarded.push(badge.id);
+      } else if (!earned && had) {
+        delete next[badge.id];
+        revoked.push(badge.id);
+      }
+    }
+
+    if (awarded.length === 0 && revoked.length === 0) {
+      return { awarded, revoked, badges: current };
+    }
+
+    await this.userRepo.update(user.id, { badges: next as any, updatedAt: new Date() });
+    if (awarded.length) this.logger.log(`Awarded badges [${awarded.join(', ')}] to user ${user.id}`);
+    if (revoked.length) this.logger.log(`Revoked badges [${revoked.join(', ')}] from user ${user.id}`);
+    return { awarded, revoked, badges: next };
   }
 
   private isEarned(badge: Badge, m: UserMetrics): boolean {
     const threshold = badge.threshold ?? 0;
-    const trigger = normalizeKey(badge.trigger);
+    if (threshold <= 0) return false;
 
-    if (!trigger || POINTS_TRIGGERS.has(trigger)) return m.points >= threshold;
-    if (ANY_TASK_TRIGGERS.has(trigger)) return m.completedTaskKeys.length >= threshold;
+    // Client creates badges with taskTypeId — count parent-approved tasks of that type.
+    if (badge.taskTypeId) {
+      return (m.approvedByTaskTypeId[badge.taskTypeId] ?? 0) >= threshold;
+    }
+
+    const trigger = normalizeKey(badge.trigger);
+    // No type and no trigger: do not award on points (that caused every child to unlock every badge).
+    if (!trigger) return false;
+    if (POINTS_TRIGGERS.has(trigger)) return m.points >= threshold;
+    if (ANY_TASK_TRIGGERS.has(trigger)) return m.approvedTaskKeys.length >= threshold;
     if (STREAK_TRIGGERS.has(trigger)) return m.streak >= threshold;
 
     const keys = new Set([trigger, trigger.replace(/^category_/, ''), normalizeKey(badge.id)]);
-    const matching = m.completedTaskKeys.filter((taskKeys) => taskKeys.some((k) => keys.has(k))).length;
+    const matching = m.approvedTaskKeys.filter((taskKeys) => taskKeys.some((k) => keys.has(k))).length;
     return matching >= threshold;
   }
 
@@ -129,14 +157,21 @@ export class BadgeAwardsService implements OnApplicationBootstrap {
         .createQueryBuilder('t')
         .select(['t.taskType', 't.taskTypeKey'])
         .where('t.assigneeId = :userId', { userId: user.id })
-        .andWhere(`(t.completed = true OR LOWER(TRIM(t.status)) IN ('completed', 'done'))`)
+        .andWhere(`LOWER(TRIM(COALESCE(t.status, ''))) = 'approved'`)
         .getMany(),
       this.streakRepo.findOne({ where: { id: user.id } }),
     ]);
 
+    const approvedByTaskTypeId: Record<string, number> = {};
+    for (const t of tasks) {
+      if (!t.taskType) continue;
+      approvedByTaskTypeId[t.taskType] = (approvedByTaskTypeId[t.taskType] ?? 0) + 1;
+    }
+
     return {
       points: user.points ?? 0,
-      completedTaskKeys: tasks.map((t) => [normalizeKey(t.taskTypeKey), normalizeKey(t.taskType)].filter(Boolean)),
+      approvedByTaskTypeId,
+      approvedTaskKeys: tasks.map((t) => [normalizeKey(t.taskTypeKey), normalizeKey(t.taskType)].filter(Boolean)),
       streak: Math.max(streak?.count ?? 0, streak?.maxCount ?? 0),
     };
   }
@@ -150,7 +185,7 @@ export class BadgeAwardsService implements OnApplicationBootstrap {
     return {};
   }
 
-  /** Catches up children who already met a badge condition before auto-awarding existed. */
+  /** Recomputes awards (and revokes point-based false positives) after deploy. */
   private async backfill() {
     try {
       const hasGlobal = (await this.badgeRepo.count({ where: { familyId: IsNull() } })) > 0;
@@ -167,11 +202,24 @@ export class BadgeAwardsService implements OnApplicationBootstrap {
             .getRawMany<{ familyId: string }>();
 
       let awardedCount = 0;
+      let revokedCount = 0;
       for (const { familyId } of families) {
-        const result = await this.evaluateFamily(familyId);
-        awardedCount += Object.values(result).reduce((n, ids) => n + ids.length, 0);
+        const children = await this.userRepo.find({
+          where: [
+            { familyId, isParent: false },
+            { familyId, isParent: IsNull() },
+          ],
+          select: { id: true },
+        });
+        for (const child of children) {
+          const result = await this.evaluateUser(child.id);
+          awardedCount += result.awarded.length;
+          revokedCount += result.revoked.length;
+        }
       }
-      this.logger.log(`Badge backfill done: ${families.length} families checked, ${awardedCount} badges awarded`);
+      this.logger.log(
+        `Badge backfill done: ${families.length} families checked, ${awardedCount} awarded, ${revokedCount} revoked`,
+      );
     } catch (err) {
       this.logger.warn(`Badge backfill skipped: ${(err as Error).message}`);
     }

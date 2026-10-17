@@ -20,8 +20,21 @@ export class UsersService {
 
   private async withBadgesAwarded(user: User): Promise<User> {
     const evaluation = await this.badgeAwards.evaluateUserSafely(user.id);
-    if (evaluation?.awarded.length) user.badges = evaluation.badges;
+    if (evaluation && (evaluation.awarded.length || evaluation.revoked.length)) {
+      user.badges = evaluation.badges;
+    }
+    return this.present(user);
+  }
+
+  /** Rewrite stale localhost avatar URLs using the current public API base. */
+  private present<T extends User>(user: T): T {
+    const resolved = this.uploadsService.resolveProfileImageUrl(user.profileImageUrl);
+    if (resolved !== user.profileImageUrl) user.profileImageUrl = resolved ?? undefined;
     return user;
+  }
+
+  private presentMany<T extends User>(users: T[]): T[] {
+    return users.map((u) => this.present(u));
   }
 
   async findAll(
@@ -50,7 +63,7 @@ export class UsersService {
       withDeleted: false,
     });
 
-    return { items, total, page, limit };
+    return { items: this.presentMany(items), total, page, limit };
   }
 
   async findAllForFamily(familyId: string, query: PaginationQueryDto & { name?: string }) {
@@ -67,19 +80,19 @@ export class UsersService {
       withDeleted: false,
     });
 
-    return { items, total, page, limit };
+    return { items: this.presentMany(items), total, page, limit };
   }
 
   async findOne(id: string) {
     const entity = await this.repo.findOne({ where: { id }, relations: { family: true } });
     if (!entity) throw new NotFoundException('User not found');
-    return entity;
+    return this.present(entity);
   }
 
   async findOneForFamily(id: string, familyId: string) {
     const entity = await this.repo.findOne({ where: { id, familyId } });
     if (!entity) throw new NotFoundException('User not found');
-    return entity;
+    return this.present(entity);
   }
 
   async create(dto: CreateUserDto) {
@@ -108,7 +121,7 @@ export class UsersService {
     if (dto.emojiOption !== undefined) existing.emojiOption = dto.emojiOption;
 
     existing.updatedAt = new Date();
-    return await this.repo.save(existing);
+    return this.present(await this.repo.save(existing));
   }
 
   async updateAvatar(id: string, file: Express.Multer.File) {
@@ -119,7 +132,7 @@ export class UsersService {
     const existing = await this.findOneForFamily(id, familyId);
     Object.assign(existing, dto);
     const saved = await this.repo.save(existing);
-    return dto.points !== undefined ? this.withBadgesAwarded(saved) : saved;
+    return dto.points !== undefined ? this.withBadgesAwarded(saved) : this.present(saved);
   }
 
   async remove(id: string) {

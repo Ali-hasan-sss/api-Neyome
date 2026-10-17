@@ -24,7 +24,13 @@ export class BadgesController {
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiOkWrappedPaginatedResponse(CreateBadgeDto, {
     items: [
-      { id: 'b9999999-2222-3333-4444-555555555555', familyId: '2f1a9f4e-1111-2222-3333-aaaaaaaaaaaa', emoji: '🏆', threshold: 100 },
+      {
+        id: 'b9999999-2222-3333-4444-555555555555',
+        familyId: '2f1a9f4e-1111-2222-3333-aaaaaaaaaaaa',
+        emoji: '🏆',
+        threshold: 3,
+        taskTypeId: 'tt111111-2222-3333-4444-555555555555',
+      },
     ],
     total: 1,
     page: 1,
@@ -41,7 +47,8 @@ export class BadgesController {
     id: 'b9999999-2222-3333-4444-555555555555',
     familyId: '2f1a9f4e-1111-2222-3333-aaaaaaaaaaaa',
     emoji: '🏆',
-    threshold: 100,
+    threshold: 3,
+    taskTypeId: 'tt111111-2222-3333-4444-555555555555',
   })
   @ApiErrorResponses()
   findOne(@Request() req: any, @Param('id') id: string) {
@@ -69,7 +76,7 @@ export class BadgesController {
   @ApiOperation({
     summary: 'Create badge',
     description:
-      'A child earns the badge once `threshold` is reached for `trigger`: empty or `points` = points balance; `any_task` = completed tasks; `streak` = best daily streak; any other value = completed tasks whose task type key matches the trigger (`category_` prefix optional). Earned badges appear on the child as `badges: { "<badgeId>": true }`. Existing children are checked immediately.',
+      'Send `taskTypeId` (task-type id) and `threshold`. A child earns the badge when they have that many **approved** tasks (`status: "approved"`) of the same type. Points alone do not grant badges. Earned badges appear on the child as `badges: { "<badgeId>": true }`. Existing children are re-checked immediately.',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'Parents only' })
@@ -77,7 +84,8 @@ export class BadgesController {
     id: 'b9999999-2222-3333-4444-555555555555',
     familyId: '2f1a9f4e-1111-2222-3333-aaaaaaaaaaaa',
     emoji: '🏆',
-    threshold: 100,
+    threshold: 3,
+    taskTypeId: 'tt111111-2222-3333-4444-555555555555',
   })
   @ApiErrorResponses()
   create(@Request() req: any, @Body() dto: CreateBadgeDto) {

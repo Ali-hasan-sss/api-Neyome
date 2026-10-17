@@ -23,6 +23,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RequestEmailChangeDto, VerifyEmailChangeDto } from './dto/change-email.dto';
 import { MailService } from './mail.service';
+import { UploadsService } from '../modules/uploads/uploads.service';
 import { encryptDevicePin, decryptDevicePin } from './device-pin-crypto';
 import {
   assertPinFormatForAge,
@@ -50,7 +51,17 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly subscriptionPlansService: SubscriptionPlansService,
     private readonly googleAuth: GoogleAuthService,
+    private readonly uploadsService: UploadsService,
   ) {}
+
+  private presentUser<T extends Partial<User>>(user: T): T {
+    if (!user) return user;
+    const resolved = this.uploadsService.resolveProfileImageUrl(user.profileImageUrl);
+    if (resolved !== user.profileImageUrl) {
+      return { ...user, profileImageUrl: resolved ?? undefined };
+    }
+    return user;
+  }
 
   /**
    * Register a new parent user with email and password
@@ -106,7 +117,7 @@ export class AuthService {
     // Remove sensitive fields
     const { password, magicLinkToken, ...safeUser } = user;
 
-    return { user: safeUser, accessToken, family };
+    return { user: this.presentUser(safeUser), accessToken, family };
   }
 
   /**
@@ -143,7 +154,7 @@ export class AuthService {
     // Remove sensitive fields
     const { password, magicLinkToken, ...safeUser } = user;
 
-    return { user: safeUser, accessToken };
+    return { user: this.presentUser(safeUser), accessToken };
   }
 
   /**
@@ -242,7 +253,7 @@ export class AuthService {
       pinHash?: string;
       devicePinEnc?: string | null;
     };
-    return { user: safeUser, accessToken };
+    return { user: this.presentUser(safeUser), accessToken };
   }
 
   /**
@@ -331,7 +342,7 @@ export class AuthService {
     // Remove sensitive fields
     const { password, magicLinkToken: token, pinHash: _pinHash, devicePinEnc: _devicePinEnc, ...safeUser } = user as any;
 
-    return { user: safeUser, autoSignInUrl };
+    return { user: this.presentUser(safeUser), autoSignInUrl };
   }
 
   /**
@@ -388,7 +399,7 @@ export class AuthService {
       order: { createdAt: 'ASC' as any },
     });
 
-    return members;
+    return members.map((m) => this.presentUser(m));
   }
 
   /**
@@ -445,7 +456,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     const { password, magicLinkToken, pinHash, ...safeUser } = child as any;
-    return { user: safeUser, accessToken };
+    return { user: this.presentUser(safeUser), accessToken };
   }
 
   /**
@@ -480,7 +491,7 @@ export class AuthService {
     // Remove sensitive fields
     const { password, magicLinkToken, ...safeUser } = user;
 
-    return { user: safeUser, accessToken };
+    return { user: this.presentUser(safeUser), accessToken };
   }
 
   /**
@@ -534,7 +545,7 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return user;
+    return this.presentUser(user);
   }
 
   /**
@@ -550,7 +561,7 @@ export class AuthService {
       where: { familyId: parent.familyId, isParent: false },
     });
 
-    return members;
+    return members.map((m) => this.presentUser(m));
   }
 
   /**
@@ -768,6 +779,6 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
     const { password, magicLinkToken, pinHash, devicePinEnc, ...safeUser } = user;
 
-    return { user: safeUser, accessToken };
+    return { user: this.presentUser(safeUser), accessToken };
   }
 }
