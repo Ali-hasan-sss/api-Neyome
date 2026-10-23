@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiOkResponse, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
 import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -84,5 +84,21 @@ export class FamiliesController {
   @ApiErrorResponses()
   removeMyFamily(@Request() req: any) {
     return this.familiesService.remove(req.user.familyId).then((data) => ({ success: true, data, message: 'Family deleted' }));
+  }
+
+  @Get(':id')
+  @ApiOkWrappedResponse(CreateFamilyDto, {
+    id: 'b1111111-2222-3333-4444-555555555555',
+    name: 'The Smiths',
+    familyCode: 'ABC123',
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Parents only, or family does not belong to the caller' })
+  @ApiErrorResponses()
+  findOne(@Request() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    if (!req.user?.familyId || req.user.familyId !== id) {
+      throw new ForbiddenException('You can only access your own family');
+    }
+    return this.familiesService.findOne(id).then((data) => ({ success: true, data, message: 'Family fetched' }));
   }
 }

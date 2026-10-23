@@ -192,12 +192,21 @@ export class StripePlanSyncService {
     for (const status of statuses) {
       let startingAfter: string | undefined;
       do {
-        const page = await this.stripe!.subscriptions.list({
-          price: oldPriceId,
-          status,
-          limit: 100,
-          starting_after: startingAfter,
-        });
+        let page: Stripe.ApiList<Stripe.Subscription>;
+        try {
+          page = await this.stripe!.subscriptions.list({
+            price: oldPriceId,
+            status,
+            limit: 100,
+            starting_after: startingAfter,
+          });
+        } catch (err) {
+          if (this.isResourceMissing(err)) {
+            this.logger.warn(`Stripe price ${oldPriceId} is not on this account. Skipping subscription move.`);
+            return;
+          }
+          throw err;
+        }
         for (const sub of page.data) {
           const item = sub.items.data.find((entry) => {
             const id = typeof entry.price === 'string' ? entry.price : entry.price?.id;
