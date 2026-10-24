@@ -2,7 +2,8 @@
 
 The mobile app lets a **parent** pick a plan and a billing period (**month** or **year**), then opens a Stripe Checkout URL.
 
-**Auth:** `Authorization: Bearer <parent JWT>`  
+**Auth:** `Authorization: Bearer <owner JWT>` and `x-api-key: <API_KEY>`  
+**Who can pay:** only the family `ownerId`. A co-parent (`isParent: true` on a QR account) can open parent screens but checkout and auto-renew return **403**.  
 **Swagger:** tag `Billing` at `/docs`
 
 ---
@@ -43,7 +44,8 @@ Parent only. The app must send the period the user selected.
 
 ```http
 POST /billing/stripe/checkout-session
-Authorization: Bearer <parent-jwt>
+x-api-key: <API_KEY>
+Authorization: Bearer <owner-jwt>
 Content-Type: application/json
 
 {
@@ -68,6 +70,8 @@ If `interval` is omitted, the server infers it from the id: `_yearly` or `_annua
 ### Success — 200
 
 Open `data.url` in the browser or WebView. Do not treat this response as an active subscription; activation happens after Stripe payment via webhook.
+
+Reload the family (including `plan`) with `GET /families/{familyId}` using the same `x-api-key` and owner bearer token. The id must be the caller's own family.
 
 ```json
 {

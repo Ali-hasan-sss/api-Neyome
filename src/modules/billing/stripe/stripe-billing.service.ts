@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -40,6 +41,15 @@ export class StripeBillingService {
     this.stripe = new Stripe(secretKey || 'missing', {
       apiVersion: '2024-06-20',
     });
+  }
+
+  async assertSubscriptionOwner(familyId: string, userId: string): Promise<void> {
+    if (!familyId) throw new NotFoundException('Family not found');
+    const family = await this.familyRepo.findOne({ where: { id: familyId } });
+    if (!family) throw new NotFoundException('Family not found');
+    if (!family.ownerId || family.ownerId !== userId) {
+      throw new ForbiddenException('Only the account owner can manage the subscription');
+    }
   }
 
   private resolveStripePriceId(

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -27,6 +28,7 @@ import { DailyQuotesModule } from './modules/daily-quotes/daily-quotes.module';
 import { StripeBillingModule } from './modules/billing/stripe/stripe-billing.module';
 import { AdminModule } from './admin/admin.module';
 import { PublicModule } from './public/public.module';
+import { ApiKeyGuard } from './auth/api-key.guard';
 
 @Module({
   imports: [
@@ -59,6 +61,6 @@ import { PublicModule } from './public/public.module';
     PublicModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ApiKeyGuard }],
 })
 export class AppModule {}

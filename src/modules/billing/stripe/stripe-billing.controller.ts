@@ -109,7 +109,7 @@ synced from Stripe (\`currentPeriodStart\` / \`currentPeriodEnd\` / \`renewsAt\`
   @ApiOperation({
     summary: 'Enable / disable auto-renewal',
     description: `
-Mobile endpoint for the **parent** to toggle automatic plan renewal.
+Mobile endpoint for the **family owner** to toggle automatic plan renewal. A co-parent (\`isParent: true\` but not \`ownerId\`) receives **403**.
 
 - \`autoRenew: true\` → Stripe renews at \`currentPeriodEnd\` (same Stripe billing instant).
 - \`autoRenew: false\` → subscription stays active until \`currentPeriodEnd\`, then ends (no further charge).
@@ -139,13 +139,14 @@ Requires an existing active Stripe subscription. Returns the updated subscriptio
     },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  @ApiForbiddenResponse({ description: 'Parents only' })
+  @ApiForbiddenResponse({ description: 'Not the family owner' })
   @ApiBadRequestResponse({ description: 'No active Stripe subscription, or invalid body' })
   async setAutoRenew(@Request() req: any, @Body() body: SetAutoRenewDto) {
     if (typeof body?.autoRenew !== 'boolean') {
       throw new BadRequestException('autoRenew (boolean) is required');
     }
 
+    await this.stripeBillingService.assertSubscriptionOwner(req.user.familyId, req.user.sub);
     const data = await this.stripeBillingService.setAutoRenew(req.user.familyId, body.autoRenew);
     return {
       success: true,
@@ -159,12 +160,14 @@ Requires an existing active Stripe subscription. Returns the updated subscriptio
   @ApiOperation({
     summary: 'Create Stripe checkout session',
     description: `
-Creates a Stripe Checkout Session (subscription mode) for the parent family.
+Creates a Stripe Checkout Session (subscription mode) for the family **owner** only. A co-parent receives **403**.
 
 - Only **one** active paid subscription per family is allowed (409 if already subscribed).
 - \`interval\` selects the monthly or yearly Stripe price on that plan.
 - After payment, webhooks copy \`current_period_start\` / \`current_period_end\` from Stripe. The server does not invent a different day count.
+- The app can reload the family with \`GET /families/:id\`.
 - Open \`data.url\` in the mobile browser / WebView to complete payment.
+- Send header \`x-api-key\` in addition to the bearer token.
     `,
   })
   @ApiBody({ type: CreateCheckoutSessionDto })
@@ -182,11 +185,12 @@ Creates a Stripe Checkout Session (subscription mode) for the parent family.
     },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  @ApiForbiddenResponse({ description: 'Parents only' })
+  @ApiForbiddenResponse({ description: 'Not the family owner' })
   @ApiBadRequestResponse({ description: 'Invalid plan or Stripe not configured' })
   @ApiConflictResponse({ description: 'Family already has an active subscription' })
   async createCheckoutSession(@Request() req: any, @Body() body: CreateCheckoutSessionDto) {
     const familyId = req.user.familyId;
+    await this.stripeBillingService.assertSubscriptionOwner(familyId, req.user.sub);
     const data = await this.stripeBillingService.createCheckoutSession({
       familyId,
       backendPlanId: body.backendPlanId,

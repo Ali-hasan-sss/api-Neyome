@@ -2,6 +2,45 @@
 
 When a **parent** adds a child via `POST /auth/family-members`, the `pin` field behavior depends on the child's `age`.
 
+Every call below also requires the mobile header `x-api-key: <API_KEY>`.
+
+---
+
+## Co-parent (`isParent: true`)
+
+Same create endpoint as a child, without a PIN. Sign-in is the QR link only (`autoSignInUrl`), not the family-code PIN flow.
+
+The response user and the JWT both include `isParent: true`, so the app opens parent screens. Subscription checkout and auto-renew stay with the family `ownerId` and return **403** for this account.
+
+`GET /auth/family-members` lists children and co-parents. `POST /auth/family-code/members` lists children only.
+
+```http
+POST /auth/family-members
+x-api-key: <API_KEY>
+Authorization: Bearer <parent-jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Sara",
+  "isParent": true
+}
+```
+
+```json
+{
+  "success": true,
+  "message": "Family member created",
+  "data": {
+    "user": { "id": "...", "name": "Sara", "isParent": true },
+    "autoSignInUrl": "https://api.neyome.com/auth/auto-signin/<token>"
+  }
+}
+```
+
+The app reads the QR, then calls `GET /auth/auto-signin/{token}` with `x-api-key`. The payload `user.isParent` chooses parent screens or child screens.
+
 **HTML reference:** [api-reference.html](http://localhost:3000/api-reference.html)
 
 ---
@@ -20,6 +59,7 @@ When a **parent** adds a child via `POST /auth/family-members`, the `pin` field 
 
 ```http
 POST /auth/family-members
+x-api-key: <API_KEY>
 Authorization: Bearer <parent-jwt>
 Content-Type: application/json
 ```
@@ -37,6 +77,7 @@ Content-Type: application/json
 
 ```http
 GET /auth/family-members/{childId}/device-pin
+x-api-key: <API_KEY>
 Authorization: Bearer <parent-jwt>
 ```
 
@@ -73,6 +114,7 @@ Authorization: Bearer <parent-jwt>
 
 ```http
 POST /auth/family-code/child-sign-in
+x-api-key: <API_KEY>
 ```
 
 ```json

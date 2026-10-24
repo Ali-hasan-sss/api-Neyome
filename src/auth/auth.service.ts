@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
@@ -274,15 +274,16 @@ export class AuthService {
       throw new NotFoundException('Family not found');
     }
 
+    const isCoParent = dto.isParent === true;
     const backendId = (family.plan as any)?.backendId ?? 'free';
     const limits = await this.subscriptionPlansService.getLimitsByBackendId(backendId);
     const maxMembers = typeof limits?.familyMembers === 'number' ? (limits.familyMembers as number) : null;
 
-    if (maxMembers != null) {
-      const childrenCount = await this.userRepo.count({
-        where: { familyId: parent.familyId, isParent: false },
+    if (maxMembers != null && family.ownerId) {
+      const membersCount = await this.userRepo.count({
+        where: { familyId: parent.familyId, id: Not(family.ownerId) },
       });
-      if (childrenCount >= maxMembers) {
+      if (membersCount >= maxMembers) {
         throw new BadRequestException('Family members limit reached for your current plan');
       }
     }
@@ -294,32 +295,31 @@ export class AuthService {
     // Generate UUID if not provided
     const userId = dto.id || crypto.randomUUID();
 
-    assertPinRequiredForAge(dto.pin, dto.age);
-    if (dto.pin) {
-      assertPinFormatForAge(dto.pin, dto.age);
-    }
-
     let pinHash: string | undefined;
-    if (dto.pin) {
-      pinHash = await bcrypt.hash(dto.pin, 10);
-    }
-
     let devicePinEnc: string | undefined;
-    if (dto.pin && isYoungChild(dto.age ?? null)) {
-      try {
-        devicePinEnc = encryptDevicePin(dto.pin);
-      } catch {
-        throw new BadRequestException(
-          'Could not store recoverable PIN (set DEVICE_PIN_ENCRYPTION_KEY or ensure JWT_SECRET is at least 16 characters)',
-        );
+    if (!isCoParent) {
+      assertPinRequiredForAge(dto.pin, dto.age);
+      if (dto.pin) {
+        assertPinFormatForAge(dto.pin, dto.age);
+        pinHash = await bcrypt.hash(dto.pin, 10);
+      }
+
+      if (dto.pin && isYoungChild(dto.age ?? null)) {
+        try {
+          devicePinEnc = encryptDevicePin(dto.pin);
+        } catch {
+          throw new BadRequestException(
+            'Could not store recoverable PIN (set DEVICE_PIN_ENCRYPTION_KEY or ensure JWT_SECRET is at least 16 characters)',
+          );
+        }
       }
     }
 
-    // Create family member
+    // Create family member. Co-parents use the same QR link as children and carry isParent for app routing.
     const user = this.userRepo.create({
       id: userId,
       name: dto.name,
-      isParent: false,
+      isParent: isCoParent,
       familyId: parent.familyId,
       familyCode: parent.familyCode,
       magicLinkToken,
@@ -507,10 +507,11 @@ export class AuthService {
       throw new NotFoundException('Parent or family not found');
     }
 
+    const family = await this.familyRepo.findOne({ where: { id: parent.familyId } });
     const member = await this.userRepo.findOne({
-      where: { id: memberId, familyId: parent.familyId, isParent: false },
+      where: { id: memberId, familyId: parent.familyId },
     });
-    if (!member) {
+    if (!member || (family?.ownerId && member.id === family.ownerId)) {
       throw new NotFoundException('Family member not found');
     }
 
@@ -557,8 +558,12 @@ export class AuthService {
       throw new NotFoundException('Parent or family not found');
     }
 
+    const family = await this.familyRepo.findOne({ where: { id: parent.familyId } });
     const members = await this.userRepo.find({
-      where: { familyId: parent.familyId, isParent: false },
+      where: family?.ownerId
+        ? { familyId: parent.familyId, id: Not(family.ownerId) }
+        : { familyId: parent.familyId, isParent: false },
+      order: { createdAt: 'ASC' },
     });
 
     return members.map((m) => this.presentUser(m));

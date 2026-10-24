@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, ForbiddenException, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiOkResponse, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiBearerAuth, ApiUnauthorizedResponse, ApiForbiddenResponse } from '@nestjs/swagger';
 import { ApiCreatedWrappedResponse, ApiOkWrappedPaginatedResponse, ApiOkWrappedResponse, ApiPaginationQueries, ApiErrorResponses } from '../../common/swagger/api';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { ParentGuard } from '../../auth/parent.guard';
@@ -87,6 +87,11 @@ export class FamiliesController {
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get the caller family by id',
+    description:
+      'Used by the app after checkout to reload the family, including `plan`. The id must be the authenticated parent family. Another family returns 403.',
+  })
   @ApiOkWrappedResponse(CreateFamilyDto, {
     id: 'b1111111-2222-3333-4444-555555555555',
     name: 'The Smiths',

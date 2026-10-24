@@ -146,12 +146,12 @@ See \`docs/AUTH-GOOGLE.md\`.
   @ApiOperation({
     summary: 'Create a family member',
     description: `
-Create a new family member (child) in the parent's family.
-Returns the created user and an auto sign-in URL that can be shared with the family member.
+Create a family member in the parent's family.
+Returns the user (including \`isParent\`) and a QR auto sign-in URL.
 
-**Authentication:** Requires JWT token from a parent user.
+**Co-parent:** send \`isParent: true\`. No PIN. They sign in by scanning the QR link, the same way a child does. The JWT and user payload keep \`isParent: true\` so the app opens parent screens. Only the family owner can change the subscription.
 
-**PIN rules:**
+**Child:** omit \`isParent\` or send \`false\`. PIN rules:
 - Age **≤ 6**: optional **emoji PIN** — exactly **4 characters** (e.g. \`🌟🎈🐻🎨\`). Numeric \`1234\` also allowed.
 - Age **> 6**: **4-digit numeric PIN** required (e.g. \`1234\`); no parent recoverable copy.
 - Age **≤ 6** with \`pin\`: bcrypt hash + **encrypted recoverable copy** — parent reads via \`GET /auth/family-members/:childId/device-pin\`.
@@ -406,8 +406,9 @@ Works for both parent and family member users.
   @ApiOperation({
     summary: 'List family members',
     description: `
-Get all family members (children) in the parent's family.
-Does not include the parent user in the response.
+Get family members other than the subscription owner.
+Children have \`isParent: false\`. Co-parents have \`isParent: true\`.
+The child device picker (\`POST /auth/family-code/members\`) still lists children only.
 
 **Authentication:** Requires JWT token from a parent user.
     `,

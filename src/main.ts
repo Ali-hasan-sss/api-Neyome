@@ -37,7 +37,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Neyome API')
     .setDescription(
-      'Neyome REST API. **HTML reference (English):** [/api-reference.html](/api-reference.html) · **Admin guide:** see `docs/ADMIN.md`',
+      'Neyome REST API. Mobile app requests must send header `x-api-key` (the server `API_KEY`). Exceptions: `/public/*`, `/admin/*`, and `POST /billing/stripe/webhook`. Authenticated app calls also send `Authorization: Bearer`. **HTML reference:** [/api-reference.html](/api-reference.html) · **Admin guide:** `docs/ADMIN.md`',
     )
     .setVersion('1.0.0')
     .addTag('Public', 'No authentication — FAQs, privacy, terms')
@@ -52,7 +52,8 @@ async function bootstrap() {
         type: 'apiKey',
         name: 'x-api-key',
         in: 'header',
-        description: 'Provide your API key',
+        description:
+          'Mobile API key. Send the server API_KEY value in the x-api-key header on every app request except /public, /admin, and the Stripe webhook.',
       },
       'apiKey',
     )
@@ -60,6 +61,7 @@ async function bootstrap() {
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearer')
     .build();
   const document = SwaggerModule.createDocument(app, config);
+  applyMobileApiKeySecurity(document as unknown as { paths?: Record<string, Record<string, unknown>> });
   (document as unknown as Record<string, unknown>)['x-tagGroups'] = [
     {
       name: 'Admin Dashboard',
@@ -86,6 +88,7 @@ async function bootstrap() {
   ];
   SwaggerModule.setup('docs', app, document, {
     swaggerOptions: {
+      persistAuthorization: true,
       docExpansion: 'none',
       tagsSorter: (a: string, b: string) => {
         const admin = (t: string) => t.startsWith('Admin');
@@ -97,4 +100,28 @@ async function bootstrap() {
   });
   await app.listen(process.env.PORT ?? 3000);
 }
+
+const SWAGGER_HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options']);
+
+function applyMobileApiKeySecurity(document: { paths?: Record<string, Record<string, unknown>> }) {
+  for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
+    if (
+      path === '/' ||
+      path.startsWith('/admin') ||
+      path.startsWith('/public') ||
+      path === '/billing/stripe/webhook'
+    ) {
+      continue;
+    }
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (!SWAGGER_HTTP_METHODS.has(method) || !operation || typeof operation !== 'object') continue;
+      const op = operation as { security?: Array<Record<string, string[]>> };
+      const security = op.security ?? [];
+      if (!security.some((entry) => Object.prototype.hasOwnProperty.call(entry, 'apiKey'))) {
+        op.security = [...security, { apiKey: [] }];
+      }
+    }
+  }
+}
+
 bootstrap();

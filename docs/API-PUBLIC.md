@@ -2,6 +2,14 @@
 
 These endpoints do **not** require `x-api-key` or JWT. Use them from mobile/web clients for read-only CMS content.
 
+Every other mobile route (auth, families, tasks, billing, and the rest of the app API) requires:
+
+```http
+x-api-key: <API_KEY>
+```
+
+`API_KEY` is the server environment value. Swagger at `/docs` has an **Authorize** field for this header. A request without it returns **401 Invalid API key**. Admin routes (`/admin/*`) and `POST /billing/stripe/webhook` do not use this header.
+
 **Base URL:** `http://localhost:3000` (or your deployment host)
 
 **HTML reference (English):** [/api-reference.html](http://localhost:3000/api-reference.html)

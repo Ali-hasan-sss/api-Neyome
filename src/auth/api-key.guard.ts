@@ -2,8 +2,8 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { ConfigService } from '@nestjs/config';
 
 /**
- * API Key guard for server-to-server or admin authentication.
- * Can be used alongside JWT auth for specific admin endpoints.
+ * Requires the mobile `x-api-key` header to match `API_KEY`.
+ * Skips admin, public CMS, Stripe webhooks, docs, and uploads.
  */
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
@@ -11,6 +11,10 @@ export class ApiKeyGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
+    if (request.method === 'OPTIONS' || this.isExemptPath(request.path || request.url || '')) {
+      return true;
+    }
+
     const apiKey = request.headers['x-api-key'] as string | undefined;
     const expected = this.configService.get<string>('API_KEY');
 
@@ -28,5 +32,20 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  /** Admin, public CMS, Stripe webhooks, and docs are not mobile app calls. */
+  private isExemptPath(rawPath: string): boolean {
+    const path = rawPath.split('?')[0];
+    return (
+      path === '/' ||
+      path === '/api-reference' ||
+      path.startsWith('/admin') ||
+      path.startsWith('/public') ||
+      path.startsWith('/docs') ||
+      path.startsWith('/uploads') ||
+      path === '/billing/stripe/webhook' ||
+      path.endsWith('.html')
+    );
   }
 }
