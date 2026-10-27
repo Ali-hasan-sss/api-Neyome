@@ -6,7 +6,9 @@ import { Family } from '../../entities/family.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateTaskTypeDto } from './dto/create-task-type.dto';
 import { UpdateTaskTypeDto } from './dto/update-task-type.dto';
+import { customTaskTypeCap } from '../subscription-plans/plan-limits';
 import { SubscriptionPlansService } from '../subscription-plans/subscription-plans.service';
+import { familyHasPaidAccess } from '../billing/stripe/family-plan.types';
 
 @Injectable()
 export class TaskTypesService {
@@ -57,17 +59,29 @@ export class TaskTypesService {
     if (dto.familyId) {
       const family = await this.familyRepo.findOne({ where: { id: dto.familyId } });
       if (family) {
-        const backendId = (family.plan as any)?.backendId ?? 'free';
-        const limits = await this.subscriptionPlansService.getLimitsByBackendId(backendId);
-        const taskTypes = (limits?.taskTypes as string | undefined) ?? 'limited';
-        if (taskTypes === 'limited') {
+        const planState = (family.plan ?? {}) as { backendId?: string; status?: string; stripeSubscriptionId?: string | null };
+        const backendId = planState.backendId?.trim() || 'free';
+        const paid = familyHasPaidAccess(planState);
+        const ownPlan = await this.subscriptionPlansService.findByBackendId(backendId);
+        const limits = (paid ? ownPlan?.limits : ownPlan?.limits ?? (await this.subscriptionPlansService.getLimitsByBackendId('free'))) ?? {};
+        const cap = customTaskTypeCap(limits, backendId, paid);
+        if (cap === 0) {
           throw new BadRequestException('Custom task types are not available on your current plan');
+        }
+        if (cap != null) {
+          const existing = await this.repo.count({ where: { familyId: dto.familyId } });
+          if (existing >= cap) {
+            throw new BadRequestException('Custom task type limit reached for your current plan');
+          }
         }
       }
     }
 
+    const { name, icon, ...fields } = dto;
     const entity = this.repo.create({
-      ...dto,
+      ...fields,
+      title: fields.title ?? (name ? { en: name } : undefined),
+      emoji: fields.emoji ?? icon,
       createdAt: dto.createdAt ? new Date(dto.createdAt) : undefined,
     } as any);
     return await this.repo.save(entity);
@@ -75,20 +89,24 @@ export class TaskTypesService {
 
   async update(id: string, dto: UpdateTaskTypeDto) {
     const existing = await this.findOne(id);
-    Object.assign(existing, {
-      ...dto,
-      createdAt: (dto as any).createdAt ? new Date((dto as any).createdAt) : existing.createdAt,
-    });
+    this.applyTaskTypePatch(existing, dto);
     return await this.repo.save(existing);
   }
 
   async updateForFamily(id: string, familyId: string, dto: UpdateTaskTypeDto) {
     const existing = await this.findOneForFamily(id, familyId);
-    Object.assign(existing, {
-      ...dto,
-      createdAt: (dto as any).createdAt ? new Date((dto as any).createdAt) : existing.createdAt,
-    });
+    this.applyTaskTypePatch(existing, dto);
     return await this.repo.save(existing);
+  }
+
+  private applyTaskTypePatch(existing: TaskType, dto: UpdateTaskTypeDto) {
+    const { name, icon, createdAt, ...fields } = dto;
+    Object.assign(existing, {
+      ...fields,
+      title: fields.title ?? (name ? { en: name } : existing.title),
+      emoji: fields.emoji ?? icon ?? existing.emoji,
+      createdAt: createdAt ? new Date(createdAt) : existing.createdAt,
+    });
   }
 
   async remove(id: string) {

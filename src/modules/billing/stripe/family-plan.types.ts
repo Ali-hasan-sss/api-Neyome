@@ -35,6 +35,22 @@ export function isPaidActivePlan(plan?: FamilyPlanState | null): boolean {
   return PAID_ACTIVE_STATUSES.has(status);
 }
 
+/** Active Stripe subscription even when backendId was left as `free`. */
+export function familyHasPaidAccess(plan?: {
+  backendId?: string | null;
+  status?: string | null;
+  stripeSubscriptionId?: string | null;
+} | null): boolean {
+  if (!plan) return false;
+  if (plan.backendId && plan.backendId !== 'free') {
+    const status = plan.status ?? 'active';
+    if (PAID_ACTIVE_STATUSES.has(status)) return true;
+  }
+  if (!plan.stripeSubscriptionId) return false;
+  const status = plan.status ?? 'active';
+  return PAID_ACTIVE_STATUSES.has(status);
+}
+
 export function unixToIso(seconds?: number | null): string | null {
   if (seconds == null || !Number.isFinite(seconds)) return null;
   return new Date(seconds * 1000).toISOString();

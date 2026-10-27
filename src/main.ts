@@ -37,7 +37,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Neyome API')
     .setDescription(
-      'Neyome REST API. Mobile app requests must send header `x-api-key` (the server `API_KEY`). Exceptions: `/public/*`, `/admin/*`, and `POST /billing/stripe/webhook`. Authenticated app calls also send `Authorization: Bearer`. **HTML reference:** [/api-reference.html](/api-reference.html) · **Admin guide:** `docs/ADMIN.md`',
+      'Neyome REST API. The mobile app must send header `x-api-key` (server `API_KEY`). Browser calls from `FRONTEND_CORS_ORIGINS` and `ADMIN_CORS_ORIGINS` do not. Also exempt: `/public/*`, `/admin/*`, and `POST /billing/stripe/webhook`. **HTML reference:** [/api-reference.html](/api-reference.html) · **Admin guide:** `docs/ADMIN.md`',
     )
     .setVersion('1.0.0')
     .addTag('Public', 'No authentication — FAQs, privacy, terms')

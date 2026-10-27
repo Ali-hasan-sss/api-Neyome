@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Raw, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { SubscriptionPlan } from '../../entities/subscription-plan.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateSubscriptionPlanDto } from './dto/create-subscription-plan.dto';
@@ -35,18 +35,29 @@ export class SubscriptionPlansService {
   }
 
   async findByBackendId(backendId: string): Promise<SubscriptionPlan | null> {
-    const entity = await this.repo.findOne({
-      where: {
-        features: Raw((alias) => `${alias} ->> 'backendId' = :backendId`, { backendId }),
-      } as any,
+    const key = backendId.trim();
+    const plans = await this.repo.find();
+    const match = plans.find((plan) => {
+      const featureId = (plan.features as { backendId?: string } | null)?.backendId?.trim();
+      return featureId === key || plan.id === key;
     });
-    return entity ?? null;
+    if (match) return match;
+    if (key !== 'free') return null;
+    return (
+      plans.find((plan) => {
+        const featureId = (plan.features as { backendId?: string } | null)?.backendId?.trim();
+        return !featureId || featureId === 'free';
+      }) ?? null
+    );
   }
 
   async getLimitsByBackendId(backendId?: string | null): Promise<any> {
     const key = backendId?.trim() ? backendId.trim() : 'free';
-    const plan = (await this.findByBackendId(key)) ?? (await this.findByBackendId('free'));
-    return plan?.limits ?? {};
+    const plan = await this.findByBackendId(key);
+    if (plan?.limits) return plan.limits;
+    if (key === 'free') return {};
+    const free = await this.findByBackendId('free');
+    return free?.limits ?? {};
   }
 
   async create(dto: CreateSubscriptionPlanDto) {

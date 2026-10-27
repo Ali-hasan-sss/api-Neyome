@@ -12,6 +12,16 @@ export class CreateTaskTypeDto {
   @IsString()
   emoji?: string;
 
+  /** App alias for `emoji`. */
+  @IsOptional()
+  @IsString()
+  icon?: string;
+
+  /** App alias stored as `title.en`. */
+  @IsOptional()
+  @IsString()
+  name?: string;
+
   @IsOptional()
   @IsString()
   createdBy?: string;

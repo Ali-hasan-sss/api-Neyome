@@ -2,13 +2,13 @@
 
 These endpoints do **not** require `x-api-key` or JWT. Use them from mobile/web clients for read-only CMS content.
 
-Every other mobile route (auth, families, tasks, billing, and the rest of the app API) requires:
+Every other **mobile app** route (auth, families, tasks, billing, and the rest of the app API) requires:
 
 ```http
 x-api-key: <API_KEY>
 ```
 
-`API_KEY` is the server environment value. Swagger at `/docs` has an **Authorize** field for this header. A request without it returns **401 Invalid API key**. Admin routes (`/admin/*`) and `POST /billing/stripe/webhook` do not use this header.
+Browser requests from the marketing site and the admin dashboard do not. Those origins are `FRONTEND_CORS_ORIGINS` and `ADMIN_CORS_ORIGINS`. The dashboard also sends `x-api-key` when `NEXT_PUBLIC_API_KEY` is set. A mobile request without the key returns **401 Invalid API key**. `/public/*`, `/admin/*`, and `POST /billing/stripe/webhook` never require it.
 
 **Base URL:** `http://localhost:3000` (or your deployment host)
 

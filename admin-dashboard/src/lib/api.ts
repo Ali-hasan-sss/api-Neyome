@@ -1,6 +1,11 @@
 import type { ApiEnvelope } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+
+function apiKeyHeader(): Record<string, string> {
+  return API_KEY ? { 'x-api-key': API_KEY } : {};
+}
 
 export class ApiError extends Error {
   constructor(
@@ -21,6 +26,7 @@ export async function apiRequest<T>(
     ...rest,
     headers: {
       'Content-Type': 'application/json',
+      ...apiKeyHeader(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
@@ -50,6 +56,7 @@ export async function apiMultipartRequest<T>(
     method,
     ...rest,
     headers: {
+      ...apiKeyHeader(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: formData,

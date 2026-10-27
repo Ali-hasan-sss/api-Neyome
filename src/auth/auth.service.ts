@@ -13,6 +13,8 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
 import { Family } from '../entities/family.entity';
+import { readNumericLimit } from '../modules/subscription-plans/plan-limits';
+import { familyHasPaidAccess } from '../modules/billing/stripe/family-plan.types';
 import { SubscriptionPlansService } from '../modules/subscription-plans/subscription-plans.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -275,14 +277,21 @@ export class AuthService {
     }
 
     const isCoParent = dto.isParent === true;
-    const backendId = (family.plan as any)?.backendId ?? 'free';
-    const limits = await this.subscriptionPlansService.getLimitsByBackendId(backendId);
-    const maxMembers = typeof limits?.familyMembers === 'number' ? (limits.familyMembers as number) : null;
+    const planState = (family.plan ?? {}) as {
+      backendId?: string;
+      status?: string;
+      stripeSubscriptionId?: string | null;
+    };
+    const backendId = planState.backendId?.trim() || 'free';
+    const paid = familyHasPaidAccess(planState);
+    const ownPlan = await this.subscriptionPlansService.findByBackendId(backendId);
+    const limits = (ownPlan?.limits ??
+      (paid ? {} : await this.subscriptionPlansService.getLimitsByBackendId('free'))) as Record<string, unknown>;
+    let maxMembers = readNumericLimit(limits, ['familyMembers', 'members', 'users']);
+    if (maxMembers == null && !paid) maxMembers = 4;
 
-    if (maxMembers != null && family.ownerId) {
-      const membersCount = await this.userRepo.count({
-        where: { familyId: parent.familyId, id: Not(family.ownerId) },
-      });
+    if (maxMembers != null) {
+      const membersCount = await this.userRepo.count({ where: { familyId: parent.familyId } });
       if (membersCount >= maxMembers) {
         throw new BadRequestException('Family members limit reached for your current plan');
       }
