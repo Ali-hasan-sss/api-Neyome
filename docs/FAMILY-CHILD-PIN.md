@@ -39,7 +39,13 @@ Content-Type: application/json
 }
 ```
 
-The app reads the QR, then calls `GET /auth/auto-signin/{token}` with `x-api-key`. The payload `user.isParent` chooses parent screens or child screens.
+The app reads the QR, then calls `GET /auth/auto-signin/{token}?fcmToken=<device-token>` with `x-api-key`. The payload `user.isParent` chooses parent screens or child screens. `fcmToken` is optional and is appended to `user.fcmTokens` without duplicates.
+
+Child PIN sign-in accepts the same field in the body: `POST /auth/family-code/signin` with `{ "familyCode", "childId", "pin", "fcmToken" }`.
+
+Parent login: `POST /auth/login` with `{ "email", "password", "fcmToken" }`.
+
+Logout from a device: `PATCH /users/me` with `{ "removeFcmToken": "<device-token>" }`. Adding a token later uses `{ "fcmToken": "<device-token>" }` on the same route.
 
 **HTML reference:** [api-reference.html](http://localhost:3000/api-reference.html)
 

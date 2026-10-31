@@ -8,6 +8,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
 import { UploadsService } from '../uploads/uploads.service';
 import { BadgeAwardsService } from '../badges/badge-awards.service';
+import { addFcmToken, removeFcmToken } from '../../common/fcm-tokens';
 
 @Injectable()
 export class UsersService {
@@ -119,6 +120,14 @@ export class UsersService {
     if (dto.name !== undefined) existing.name = dto.name;
     if (dto.locale !== undefined) existing.locale = dto.locale;
     if (dto.emojiOption !== undefined) existing.emojiOption = dto.emojiOption;
+
+    const add = dto.fcmToken?.trim();
+    const remove = dto.removeFcmToken?.trim();
+    if (add || remove) {
+      let tokens = add ? addFcmToken(existing.fcmTokens, add) : existing.fcmTokens;
+      if (remove) tokens = removeFcmToken(tokens, remove);
+      existing.fcmTokens = tokens;
+    }
 
     existing.updatedAt = new Date();
     return this.present(await this.repo.save(existing));

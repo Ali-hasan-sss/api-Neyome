@@ -34,4 +34,12 @@ export class FamilyCodeChildSignInDto {
   @IsOptional()
   @IsString()
   pin?: string;
+
+  @ApiPropertyOptional({
+    description: 'Firebase device token. Appended to the child fcmTokens list.',
+    example: 'fcm-device-token',
+  })
+  @IsOptional()
+  @IsString()
+  fcmToken?: string;
 }

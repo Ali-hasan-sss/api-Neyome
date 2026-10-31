@@ -1,16 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RewardList } from '../../entities/reward-list.entity';
+import { Family } from '../../entities/family.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateRewardListDto } from './dto/create-reward-list.dto';
 import { UpdateRewardListDto } from './dto/update-reward-list.dto';
+import { SubscriptionPlansService } from '../subscription-plans/subscription-plans.service';
+import { familyHasPaidAccess } from '../billing/stripe/family-plan.types';
+import { readNumericLimit } from '../subscription-plans/plan-limits';
 
 @Injectable()
 export class RewardListsService {
   constructor(
     @InjectRepository(RewardList)
     private readonly repo: Repository<RewardList>,
+    @InjectRepository(Family)
+    private readonly familyRepo: Repository<Family>,
+    private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   async findAll(query: PaginationQueryDto) {
@@ -49,11 +56,36 @@ export class RewardListsService {
   }
 
   async create(dto: CreateRewardListDto) {
+    await this.assertRewardListLimit(dto.familyId);
     const entity = this.repo.create({
       ...dto,
       createdAt: dto.createdAt ? new Date(dto.createdAt) : undefined,
     } as any);
     return await this.repo.save(entity);
+  }
+
+  private async assertRewardListLimit(familyId?: string) {
+    if (!familyId) return;
+    const family = await this.familyRepo.findOne({ where: { id: familyId } });
+    if (!family) return;
+    const planState = (family.plan ?? {}) as {
+      backendId?: string;
+      status?: string;
+      stripeSubscriptionId?: string | null;
+    };
+    const backendId = planState.backendId?.trim() || 'free';
+    const paid = familyHasPaidAccess(planState);
+    const ownPlan = await this.subscriptionPlansService.findByBackendId(backendId);
+    const limits = (ownPlan?.limits ??
+      (paid ? {} : await this.subscriptionPlansService.getLimitsByBackendId('free'))) as Record<string, unknown>;
+    let maxRewards = readNumericLimit(limits, ['rewardsPerDay', 'rewards']);
+    if (maxRewards == null && !paid) maxRewards = 10;
+    if (maxRewards == null) return;
+
+    const count = await this.repo.count({ where: { familyId } });
+    if (count >= maxRewards) {
+      throw new BadRequestException('Rewards limit reached for your current plan');
+    }
   }
 
   async update(id: string, dto: UpdateRewardListDto) {

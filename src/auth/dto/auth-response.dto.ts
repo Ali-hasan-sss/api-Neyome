@@ -34,6 +34,13 @@ export class UserResponseDto {
   @ApiPropertyOptional({ example: 'en' })
   locale?: string;
 
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['fcm-device-token'],
+    description: 'Firebase device tokens saved for this account',
+  })
+  fcmTokens?: string[];
+
   @ApiPropertyOptional({ example: '2024-01-15T10:30:00.000Z' })
   createdAt?: Date;
 

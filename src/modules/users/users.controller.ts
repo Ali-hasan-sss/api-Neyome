@@ -74,7 +74,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Update current user profile',
     description:
-      'Update name, locale, emoji, and/or profile image. Send `multipart/form-data` when uploading an image, or `application/json` for text fields only. Works for app users and admins.',
+      'Update name, locale, emoji, and/or profile image. `fcmToken` is added to `fcmTokens` without duplicates. `removeFcmToken` removes that device token (use on logout). Send `multipart/form-data` when uploading an image, or `application/json` for text fields only.',
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({ type: UpdateMeMultipartDto })

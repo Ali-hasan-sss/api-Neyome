@@ -26,6 +26,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RequestEmailChangeDto, VerifyEmailChangeDto } from './dto/change-email.dto';
 import { MailService } from './mail.service';
 import { UploadsService } from '../modules/uploads/uploads.service';
+import { addFcmToken } from '../common/fcm-tokens';
 import { encryptDevicePin, decryptDevicePin } from './device-pin-crypto';
 import {
   assertPinFormatForAge,
@@ -63,6 +64,15 @@ export class AuthService {
       return { ...user, profileImageUrl: resolved ?? undefined };
     }
     return user;
+  }
+
+  /** Append a device token. Other devices on the same account stay in the list. */
+  private async rememberFcmToken(user: User, token?: string | null): Promise<void> {
+    const value = token?.trim();
+    if (!value) return;
+    const fcmTokens = addFcmToken(user.fcmTokens, value);
+    user.fcmTokens = fcmTokens;
+    await this.userRepo.update(user.id, { fcmTokens, updatedAt: new Date() });
   }
 
   /**
@@ -152,6 +162,7 @@ export class AuthService {
       familyId: user.familyId,
     };
     const accessToken = this.jwtService.sign(payload);
+    await this.rememberFcmToken(user, dto.fcmToken);
 
     // Remove sensitive fields
     const { password, magicLinkToken, ...safeUser } = user;
@@ -418,6 +429,7 @@ export class AuthService {
     familyCode: string;
     childId: string;
     pin?: string;
+    fcmToken?: string;
   }): Promise<{ user: Partial<User>; accessToken: string }> {
     const family = await this.familyRepo.findOne({ where: { familyCode: params.familyCode } });
     if (!family) {
@@ -463,6 +475,7 @@ export class AuthService {
       familyId: child.familyId,
     };
     const accessToken = this.jwtService.sign(payload);
+    await this.rememberFcmToken(child, params.fcmToken);
 
     const { password, magicLinkToken, pinHash, ...safeUser } = child as any;
     return { user: this.presentUser(safeUser), accessToken };
@@ -471,7 +484,7 @@ export class AuthService {
   /**
    * Auto sign-in using magic link token
    */
-  async autoSignIn(token: string): Promise<{ user: Partial<User>; accessToken: string }> {
+  async autoSignIn(token: string, fcmToken?: string): Promise<{ user: Partial<User>; accessToken: string }> {
     // Find user with magic link token
     const user = await this.userRepo
       .createQueryBuilder('user')
@@ -496,6 +509,7 @@ export class AuthService {
       familyId: user.familyId,
     };
     const accessToken = this.jwtService.sign(payload);
+    await this.rememberFcmToken(user, fcmToken);
 
     // Remove sensitive fields
     const { password, magicLinkToken, ...safeUser } = user;

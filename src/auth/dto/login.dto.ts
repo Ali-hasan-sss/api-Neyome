@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 
 /**
  * DTO for parent user login
@@ -18,4 +18,12 @@ export class LoginDto {
   })
   @IsString()
   password: string;
+
+  @ApiPropertyOptional({
+    description: 'Firebase device token. Appended to fcmTokens without replacing tokens from other devices.',
+    example: 'fcm-device-token',
+  })
+  @IsOptional()
+  @IsString()
+  fcmToken?: string;
 }

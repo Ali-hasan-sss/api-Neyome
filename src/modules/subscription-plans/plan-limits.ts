@@ -6,7 +6,14 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-/** First numeric limit among the given keys. Catalog plans store `members`, not `familyMembers`. */
+export function utcDayBounds(input?: string | Date | null): { start: Date; end: Date } {
+  const raw = input ? new Date(input) : new Date();
+  const basis = Number.isNaN(raw.getTime()) ? new Date() : raw;
+  const start = new Date(Date.UTC(basis.getUTCFullYear(), basis.getUTCMonth(), basis.getUTCDate()));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
 export function readNumericLimit(limits: Limits, keys: string[]): number | null {
   if (!limits) return null;
   for (const key of keys) {

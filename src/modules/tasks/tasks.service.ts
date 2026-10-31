@@ -1,20 +1,27 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, ILike } from 'typeorm';
 import { Task } from '../../entities/task.entity';
+import { Family } from '../../entities/family.entity';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { StreaksService } from '../streaks/streaks.service';
 import { BadgeAwardsService } from '../badges/badge-awards.service';
+import { SubscriptionPlansService } from '../subscription-plans/subscription-plans.service';
+import { familyHasPaidAccess } from '../billing/stripe/family-plan.types';
+import { readNumericLimit, utcDayBounds } from '../subscription-plans/plan-limits';
 
 @Injectable()
 export class TasksService {
   constructor(
     @InjectRepository(Task)
     private readonly repo: Repository<Task>,
+    @InjectRepository(Family)
+    private readonly familyRepo: Repository<Family>,
     private readonly streaksService: StreaksService,
     private readonly badgeAwards: BadgeAwardsService,
+    private readonly subscriptionPlansService: SubscriptionPlansService,
   ) {}
 
   private isTaskCompleted(task: Pick<Task, 'completed' | 'status'>): boolean {
@@ -71,6 +78,7 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto) {
+    await this.assertDailyTaskLimit(dto.familyId, dto.date);
     const fields = this.normalizeTaskInput(dto);
     const entity = this.repo.create({
       ...fields,
@@ -96,6 +104,36 @@ export class TasksService {
     }
 
     return saved;
+  }
+
+  private async assertDailyTaskLimit(familyId?: string, date?: string) {
+    if (!familyId) return;
+    const family = await this.familyRepo.findOne({ where: { id: familyId } });
+    if (!family) return;
+    const planState = (family.plan ?? {}) as {
+      backendId?: string;
+      status?: string;
+      stripeSubscriptionId?: string | null;
+    };
+    const backendId = planState.backendId?.trim() || 'free';
+    const paid = familyHasPaidAccess(planState);
+    const ownPlan = await this.subscriptionPlansService.findByBackendId(backendId);
+    const limits = (ownPlan?.limits ??
+      (paid ? {} : await this.subscriptionPlansService.getLimitsByBackendId('free'))) as Record<string, unknown>;
+    let maxPerDay = readNumericLimit(limits, ['tasksPerDay', 'tasks']);
+    if (maxPerDay == null && !paid) maxPerDay = 10;
+    if (maxPerDay == null) return;
+
+    const { start, end } = utcDayBounds(date);
+    const count = await this.repo
+      .createQueryBuilder('task')
+      .where('task.familyId = :familyId', { familyId })
+      .andWhere('COALESCE(task.date, task.createdAt) >= :start', { start })
+      .andWhere('COALESCE(task.date, task.createdAt) < :end', { end })
+      .getCount();
+    if (count >= maxPerDay) {
+      throw new BadRequestException('Daily task limit reached for your current plan');
+    }
   }
 
   async update(id: string, dto: UpdateTaskDto) {

@@ -24,4 +24,11 @@ export class UserProfileDto {
 
   @ApiPropertyOptional({ example: false })
   isAdmin?: boolean;
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['fcm-device-token'],
+    description: 'Firebase device tokens for this account',
+  })
+  fcmTokens?: string[];
 }
