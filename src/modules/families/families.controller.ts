@@ -7,13 +7,17 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { CreateFamilyDto } from './dto/create-family.dto';
 import { UpdateFamilyDto } from './dto/update-family.dto';
 import { FamiliesService } from './families.service';
+import { AccountDeletionService } from './account-deletion.service';
 
 @UseGuards(JwtAuthGuard, ParentGuard)
 @ApiBearerAuth()
 @ApiTags('Families')
 @Controller('families')
 export class FamiliesController {
-  constructor(private readonly familiesService: FamiliesService) {}
+  constructor(
+    private readonly familiesService: FamiliesService,
+    private readonly accountDeletion: AccountDeletionService,
+  ) {}
 
   @Get()
   @ApiPaginationQueries()
@@ -60,6 +64,11 @@ export class FamiliesController {
   }
 
   @Delete('my-family')
+  @ApiOperation({
+    summary: 'Delete the family and everything that belongs to it',
+    description:
+      'Owner only. Soft-deletes the family, every member account, tasks, reward lists, claimed rewards, rewards, points, badges, task types, streaks, and settings. Cancels the Stripe subscription when one exists. A co-parent deletes only their own account with DELETE /users/me.',
+  })
   @ApiOkResponse({
     schema: {
       type: 'object',
@@ -83,7 +92,9 @@ export class FamiliesController {
   @ApiForbiddenResponse({ description: 'Parents only' })
   @ApiErrorResponses()
   removeMyFamily(@Request() req: any) {
-    return this.familiesService.remove(req.user.familyId).then((data) => ({ success: true, data, message: 'Family deleted' }));
+    return this.accountDeletion
+      .deleteFamily(req.user.familyId, req.user.sub)
+      .then((data) => ({ success: true, data, message: 'Family deleted' }));
   }
 
   @Get(':id')

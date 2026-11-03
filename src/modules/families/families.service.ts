@@ -41,8 +41,4 @@ export class FamiliesService {
     return await this.repo.save(existing);
   }
 
-  async remove(id: string) {
-    await this.repo.softDelete(id);
-    return { id };
-  }
 }

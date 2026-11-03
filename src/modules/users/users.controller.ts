@@ -11,6 +11,7 @@ import { UpdateMeDto } from './dto/update-me.dto';
 import { UpdateMeMultipartDto, UploadAvatarDto } from './dto/update-me-multipart.dto';
 import { UserProfileDto } from './dto/user-profile.dto';
 import { UsersService } from './users.service';
+import { AccountDeletionService } from '../families/account-deletion.service';
 
 const AVATAR_UPLOAD_OPTIONS = {
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -21,7 +22,10 @@ const AVATAR_UPLOAD_OPTIONS = {
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly accountDeletion: AccountDeletionService,
+  ) {}
 
   @Get()
   @UseGuards(ParentGuard)
@@ -144,6 +148,29 @@ export class UsersController {
   @ApiErrorResponses()
   update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.updateForFamily(id, req.user.familyId, dto).then((data) => ({ success: true, data, message: 'User updated' }));
+  }
+
+  @Delete('me')
+  @ApiOperation({
+    summary: 'Delete the current account',
+    description:
+      'Required by Apple and Google Play. The family owner deletes the whole family (members, tasks, rewards, points, and the Stripe subscription). A child or co-parent deletes only their own account and personal data. Email, name, PIN, and notification tokens are cleared.',
+  })
+  @ApiOkResponse({
+    schema: {
+      example: {
+        success: true,
+        message: 'Account deleted',
+        data: { id: '8f6a9c0e-4c7a-4c72-8a3d-1b3fc0f0aa11', scope: 'family' },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiErrorResponses()
+  deleteMe(@Request() req: any) {
+    return this.accountDeletion
+      .deleteMyAccount(req.user.sub)
+      .then((data) => ({ success: true, data, message: 'Account deleted' }));
   }
 
   @Delete(':id')

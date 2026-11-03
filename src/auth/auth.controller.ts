@@ -21,6 +21,7 @@ import {
   RegisterDto,
   LoginDto,
   GoogleLoginDto,
+  AppleLoginDto,
   CreateFamilyMemberDto,
   FamilyCodeMembersDto,
   FamilyCodeChildSignInDto,
@@ -140,6 +141,48 @@ See \`docs/AUTH-GOOGLE.md\`.
   })
   async loginWithGoogle(@Body() dto: GoogleLoginDto) {
     const data = await this.authService.loginWithGoogle(dto);
+    return { success: true, data, message: 'Login successful' };
+  }
+
+  @Post('login/apple')
+  @ApiOperation({
+    summary: 'Sign in or register with Apple',
+    description: `
+Parent sign-in for the Flutter app. Required because the app also offers Google sign-in.
+
+**Client flow:**
+1. User taps Sign in with Apple.
+2. The Apple SDK returns an identity token (JWT).
+3. App posts \`idToken\`. On the first authorization, also send \`name\` — Apple does not put the name inside the token.
+4. Optional \`fcmToken\` is saved on the account.
+
+**Server:**
+- Verifies the token with Apple's public keys. Audience must be one of \`APPLE_CLIENT_IDS\` (iOS bundle id and/or Services id).
+- Finds a parent by Apple \`sub\`, then by email, or creates one.
+- Returns the same \`{ accessToken, user }\` shape as \`POST /auth/login\`.
+
+See \`docs/AUTH-APPLE.md\`.
+    `,
+  })
+  @ApiBody({ type: AppleLoginDto })
+  @ApiOkResponse({
+    description: 'Same payload shape as POST /auth/login',
+    type: LoginResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Missing or empty idToken',
+    schema: { example: { success: false, message: 'idToken is required' } },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token invalid, expired, wrong audience, or email was not shared on first sign-in',
+    schema: { example: { success: false, message: 'Invalid Apple token' } },
+  })
+  @ApiForbiddenResponse({
+    description: 'Email belongs to a non-parent account',
+    schema: { example: { success: false, message: 'Account not permitted' } },
+  })
+  async loginWithApple(@Body() dto: AppleLoginDto) {
+    const data = await this.authService.loginWithApple(dto);
     return { success: true, data, message: 'Login successful' };
   }
 

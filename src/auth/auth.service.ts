@@ -19,7 +19,9 @@ import { SubscriptionPlansService } from '../modules/subscription-plans/subscrip
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
+import { AppleLoginDto } from './dto/apple-login.dto';
 import { GoogleAuthService } from './google-auth.service';
+import { AppleAuthService } from './apple-auth.service';
 import { CreateFamilyMemberDto } from './dto/create-family-member.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -54,6 +56,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly subscriptionPlansService: SubscriptionPlansService,
     private readonly googleAuth: GoogleAuthService,
+    private readonly appleAuth: AppleAuthService,
     private readonly uploadsService: UploadsService,
   ) {}
 
@@ -252,6 +255,119 @@ export class AuthService {
     return this.issueParentToken(user);
   }
 
+  /**
+   * Sign in or register a parent from an Apple identity token.
+   * Lookup is by Apple `sub`, then by verified email. Response matches POST /auth/login.
+   */
+  async loginWithApple(dto: AppleLoginDto): Promise<{ user: Partial<User>; accessToken: string }> {
+    const idToken = typeof dto.idToken === 'string' ? dto.idToken.trim() : '';
+    if (!idToken) {
+      throw new BadRequestException('idToken is required');
+    }
+
+    const identity = await this.appleAuth.verifyIdToken(idToken);
+    const displayName = typeof dto.name === 'string' ? dto.name.trim() : '';
+
+    const byApple = await this.userRepo.findOne({ where: { appleSub: identity.sub } });
+    if (byApple) {
+      if (byApple.isParent !== true) {
+        throw new ForbiddenException('Account not permitted');
+      }
+      if (!byApple.name && displayName) {
+        await this.userRepo.update(byApple.id, { name: displayName, updatedAt: new Date() });
+        byApple.name = displayName;
+      }
+      await this.rememberFcmToken(byApple, dto.fcmToken);
+      return this.issueParentToken(byApple);
+    }
+
+    const email = identity.email;
+    if (!email) {
+      throw new UnauthorizedException('Apple did not share an email. Sign in again and choose to share your email.');
+    }
+
+    const user = await this.findOrCreateParentByEmail({
+      email,
+      displayName,
+      appleSub: identity.sub,
+    });
+    await this.rememberFcmToken(user, dto.fcmToken);
+    return this.issueParentToken(user);
+  }
+
+  private async findOrCreateParentByEmail(params: {
+    email: string;
+    displayName: string;
+    appleSub: string;
+  }): Promise<User> {
+    const email = params.email.trim().toLowerCase();
+    const existing = await this.userRepo
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', { email })
+      .getOne();
+
+    if (existing) {
+      if (existing.isParent !== true) {
+        throw new ForbiddenException('Account not permitted');
+      }
+      const patch: Partial<User> = {};
+      if (!existing.name && params.displayName) patch.name = params.displayName;
+      if (!existing.appleSub) patch.appleSub = params.appleSub;
+      else if (existing.appleSub !== params.appleSub) {
+        throw new ConflictException('This email is already linked to another Apple account');
+      }
+      if (Object.keys(patch).length > 0) {
+        patch.updatedAt = new Date();
+        await this.userRepo.update(existing.id, patch);
+        Object.assign(existing, patch);
+      }
+      return existing;
+    }
+
+    const name = params.displayName || email.split('@')[0];
+    const userId = crypto.randomUUID();
+    const family = await this.createFamilyWithUniqueCode({
+      id: crypto.randomUUID(),
+      name: `${name}'s Family`,
+      creatorId: userId,
+      ownerId: userId,
+      createdAt: new Date(),
+      plan: { backendId: 'free' },
+    });
+
+    const user = this.userRepo.create({
+      id: userId,
+      email,
+      name,
+      appleSub: params.appleSub,
+      isParent: true,
+      familyId: family.id,
+      familyCode: family.familyCode,
+      locale: 'en',
+      points: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    try {
+      await this.userRepo.save(user);
+    } catch (err: any) {
+      if (!this.isUniqueConstraintError(err)) throw err;
+      const raced = await this.userRepo.findOne({ where: { appleSub: params.appleSub } });
+      if (raced?.isParent === true) return raced;
+      const byEmail = await this.userRepo
+        .createQueryBuilder('user')
+        .where('LOWER(user.email) = :email', { email })
+        .getOne();
+      if (!byEmail || byEmail.isParent !== true) {
+        throw new ForbiddenException('Account not permitted');
+      }
+      return byEmail;
+    }
+
+    return user;
+  }
+
   private issueParentToken(user: User): { user: Partial<User>; accessToken: string } {
     const payload: JwtPayload = {
       sub: user.id,
@@ -260,12 +376,13 @@ export class AuthService {
       familyId: user.familyId,
     };
     const accessToken = this.jwtService.sign(payload);
-    const { password, magicLinkToken, pinHash, devicePinEnc, ...safeUser } = user as User & {
+    const { password, magicLinkToken, pinHash, devicePinEnc, appleSub: _appleSub, ...safeUser } = user as User & {
       password?: string;
       magicLinkToken?: string;
       pinHash?: string;
       devicePinEnc?: string | null;
     };
+    void _appleSub;
     return { user: this.presentUser(safeUser), accessToken };
   }
 

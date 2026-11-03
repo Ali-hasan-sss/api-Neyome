@@ -43,6 +43,18 @@ export class StripeBillingService {
     });
   }
 
+  /** Best-effort cancel when an account or family is deleted. A Stripe error does not block deletion. */
+  async cancelSubscriptionBestEffort(subscriptionId?: string | null): Promise<void> {
+    if (!subscriptionId || !this.configService.get<string>('STRIPE_SECRET_KEY')) return;
+    try {
+      await this.stripe.subscriptions.cancel(subscriptionId);
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'resource_missing') return;
+      this.logger.warn(`Could not cancel Stripe subscription ${subscriptionId}: ${err}`);
+    }
+  }
+
   async assertSubscriptionOwner(familyId: string, userId: string): Promise<void> {
     if (!familyId) throw new NotFoundException('Family not found');
     const family = await this.familyRepo.findOne({ where: { id: familyId } });

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { ParentGuard } from './parent.guard';
 import { MailService } from './mail.service';
 import { GoogleAuthService } from './google-auth.service';
+import { AppleAuthService } from './apple-auth.service';
 import { User } from '../entities/user.entity';
 import { Family } from '../entities/family.entity';
 import { SubscriptionPlansModule } from '../modules/subscription-plans/subscription-plans.module';
@@ -33,7 +34,7 @@ import { UploadsModule } from '../modules/uploads/uploads.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, JwtAuthGuard, ParentGuard, MailService, GoogleAuthService],
+  providers: [AuthService, JwtStrategy, JwtAuthGuard, ParentGuard, MailService, GoogleAuthService, AppleAuthService],
   exports: [AuthService, JwtAuthGuard, ParentGuard, JwtModule, PassportModule],
 })
 export class AuthModule {}

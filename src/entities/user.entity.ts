@@ -24,6 +24,10 @@ export class User {
   @Column({ type: 'text', nullable: true })
   email?: string;
 
+  /** Stable Apple user id (`sub`) from Sign in with Apple. */
+  @Column({ type: 'text', nullable: true, unique: true })
+  appleSub?: string | null;
+
   @Column({ type: 'text', nullable: true, select: false })
   password?: string;
 
